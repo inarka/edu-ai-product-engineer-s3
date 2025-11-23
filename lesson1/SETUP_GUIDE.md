@@ -154,7 +154,113 @@ python verify_setup.py
 
 ---
 
-## Step 8: Run Demos
+## Step 8: Optional - n8n Visual Demo Setup
+
+If you want to see the visual no-code demo before diving into Python code:
+
+### Install n8n
+```bash
+npm install -g n8n
+```
+
+### Run n8n
+```bash
+n8n
+```
+
+n8n will open at http://localhost:5678
+
+### Import the Workflow
+1. In n8n, click **Settings** (gear icon, top right)
+2. Select **Import from File**
+3. Choose `n8n.json` from the `lesson1/` directory
+4. Click **Import**
+
+### Configure Credentials
+The workflow uses OpenAI (for visual demo simplicity):
+1. Click on the **OpenAI Chat Model** node in the workflow
+2. Click **Create New Credential**
+3. Add your OpenAI API key
+4. Save the credential
+
+### Test the Workflow
+1. Click **Execute Workflow** button
+2. Enter a LinkedIn URL in the form
+3. Watch the visual workflow execute step-by-step
+
+**Note:** The n8n demo uses OpenAI for simplicity, but the Python code uses Claude for superior agent capabilities and visibility. Both demonstrate the same chained vs agentic concepts.
+
+---
+
+## Step 9: What to Expect During Demos
+
+Before running the code, here's what you'll see:
+
+### Chained Workflow Output
+```bash
+============================================================
+CHAINED WORKFLOW
+URL: linkedin.com/in/jenhsunhuang
+============================================================
+  [Step 1] Fetching profile: linkedin.com/in/jenhsunhuang
+  [Step X] ❌ FAILED: Profile fetch failed: 503 - Service Unavailable
+------------------------------------------------------------
+```
+
+**Key observation:** Fails immediately, no retry, no self-correction.
+
+### Agentic Workflow Output
+```bash
+============================================================
+AGENTIC WORKFLOW
+URL: linkedin.com/in/jenhsunhuang
+============================================================
+
+👤 User: Please generate a personalized LinkedIn outreach message...
+
+🤖 Agent: "I'll help generate a LinkedIn outreach message. Let me fetch the profile first."
+
+🔧 Agent using tool: mcp__linkedin__fetch_linkedin_profile
+   Input: {'profile_url': 'linkedin.com/in/jenhsunhuang'}
+
+  [Tool] Fetching profile: linkedin.com/in/jenhsunhuang
+  [Tool] ❌ Failed: API returned 503
+
+🤖 Agent: "The profile fetch failed. The URL is missing the protocol. Let me try adding https://www."
+
+🔧 Agent using tool: mcp__linkedin__fetch_linkedin_profile
+   Input: {'profile_url': 'https://www.linkedin.com/in/jenhsunhuang'}
+
+  [Tool] Fetching profile: https://www.linkedin.com/in/jenhsunhuang
+  [Tool] ✅ Success! Found profile for Jensen
+
+🤖 Agent: "Great! I found Jensen Huang's profile. He's the CEO of NVIDIA, a tech company.
+I'll use the rap/verse format as instructed for tech companies."
+
+------------------------------------------------------------
+GENERATED MESSAGE:
+Yo Jensen, mad respect for the GPU game you run,
+NVIDIA's AI chips got the whole world spun.
+We automate 70% of sales with AI precision clean,
+Help founders scale revenue like you scale machine.
+Quick chat on freeing up your sales team's grind?
+
+– Bayram
+------------------------------------------------------------
+
+💰 Total Cost: $0.032145
+```
+
+**Key observations:**
+- Agent reasons about the error
+- Tries systematic fix (adding protocol)
+- Succeeds on retry
+- Detects tech company → uses rap format
+- Shows transparent cost tracking
+
+---
+
+## Step 10: Run Demos
 
 ### Test Chained Workflow
 ```bash
@@ -282,7 +388,7 @@ Once setup is complete:
 2. ✅ Run both workflows side-by-side
 3. ✅ Modify `test_cases.py` with your own LinkedIn URLs
 4. ✅ Calculate ROI for your use case
-5. ✅ Check `workshop.md` for teaching notes
+5. ✅ Complete homework assignment (see course repo)
 
 ---
 

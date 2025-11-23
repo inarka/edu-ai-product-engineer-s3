@@ -79,6 +79,18 @@ python agent_outreach.py
 | **Success (messy data)** | 40-70% | 85-95%+ |
 | **Self-correction** | ❌ None | ✅ Built-in |
 
+### Real-World Cost Example
+
+For 500 LinkedIn prospects/month with 30% messy URLs:
+
+| Approach | API Cost | Manual Work | Total | Notes |
+|----------|----------|-------------|-------|-------|
+| **Chained** | $5/mo | $2,500/mo | **$2,505/mo** | 150 failures × 10min cleanup @ $100/hr |
+| **Agentic** | $25/mo | $200/mo | **$225/mo** | 25 failures × 5min review @ $100/hr |
+| **Savings** | -$20/mo | +$2,300/mo | **$2,280/mo** | **$27,360/year** |
+
+**ROI:** 6,740% return on 4-hour implementation investment
+
 ## 🧪 Test Cases
 
 The demo uses test cases from `test_cases.py`:
@@ -88,11 +100,10 @@ The demo uses test cases from `test_cases.py`:
    - Well-formatted, complete
    - Both workflows should succeed
 
-2. **Messy URL**: `linkedin.com/in/jenhsun-huang`
-   - Missing `https://www.`
-   - Typo in username (hyphen instead of no hyphen)
-   - Chained workflow → Fails
-   - Agentic workflow → Self-corrects!
+2. **Messy URL**: `linkedin.com/in/jenhsunhuang`
+   - Missing `https://www.` protocol
+   - Chained workflow → Fails immediately
+   - Agentic workflow → Self-corrects by adding protocol!
 
 ## 🔍 What to Watch For
 
@@ -145,4 +156,4 @@ This is **Workshop 1** of the AI Product Engineer course:
 
 ---
 
-**Questions?** Check the workshop.md for detailed notes and discussion points.
+**Questions?** Check [SETUP_GUIDE.md](SETUP_GUIDE.md) and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed help.
