@@ -97,13 +97,13 @@ The demo uses test cases from `test_cases.py`:
 
 **DEMO_PAIR:**
 1. **Clean URL**: `https://www.linkedin.com/in/jenhsunhuang/`
-   - Well-formatted, complete
+   - Correct username, properly formatted
    - Both workflows should succeed
 
-2. **Messy URL**: `linkedin.com/in/jenhsunhuang`
-   - Missing `https://www.` protocol
-   - Chained workflow → Fails immediately
-   - Agentic workflow → Self-corrects by adding protocol!
+2. **Messy URL**: `https://www.linkedin.com/in/jenhsun-huang`
+   - Username has typo (hyphen in wrong place - correct is `jenhsunhuang`)
+   - Chained workflow → Fails (profile not found)
+   - Agentic workflow → Self-corrects by trying username variations!
 
 ## 🔍 What to Watch For
 

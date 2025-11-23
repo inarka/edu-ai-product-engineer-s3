@@ -39,9 +39,11 @@ MESSY_URLS = [
 ALL_TEST_CASES = CLEAN_URLS + MESSY_URLS
 
 # For quick testing during workshop
+# NOTE: EnrichLayer API is forgiving - missing protocol/www doesn't break it!
+# To demonstrate chained workflow failure, we need actual DATA errors (typos, wrong username)
 DEMO_PAIR = [
     ("Clean", "https://www.linkedin.com/in/jenhsunhuang/"),
-    ("Messy - Missing Protocol", "linkedin.com/in/jenhsunhuang"),  # Missing https://www. (fixable!)
+    ("Messy - Username Typo", "https://www.linkedin.com/in/jenhsun-huang"),  # Hyphen typo - will fail!
 ]
 
 # Alternative demo pairs showing different self-correction scenarios

@@ -200,20 +200,22 @@ Before running the code, here's what you'll see:
 ```bash
 ============================================================
 CHAINED WORKFLOW
-URL: linkedin.com/in/jenhsunhuang
+URL: https://www.linkedin.com/in/jenhsun-huang
 ============================================================
-  [Step 1] Fetching profile: linkedin.com/in/jenhsunhuang
-  [Step X] ❌ FAILED: Profile fetch failed: 503 - Service Unavailable
+  [Step 1] Fetching profile: https://www.linkedin.com/in/jenhsun-huang
+  [Step X] ❌ FAILED: Profile fetch failed: 404 - Profile not found
 ------------------------------------------------------------
 ```
 
-**Key observation:** Fails immediately, no retry, no self-correction.
+**Key observation:** Fails immediately on username typo (hyphen), no retry, no self-correction.
+
+**Important Note:** EnrichLayer API is surprisingly forgiving - it accepts URLs without `https://www.` protocol! To demonstrate chained workflow failure, we use username typos (like `jenhsun-huang` instead of `jenhsunhuang`) which represent real-world data entry errors.
 
 ### Agentic Workflow Output
 ```bash
 ============================================================
 AGENTIC WORKFLOW
-URL: linkedin.com/in/jenhsunhuang
+URL: https://www.linkedin.com/in/jenhsun-huang
 ============================================================
 
 👤 User: Please generate a personalized LinkedIn outreach message...
@@ -221,12 +223,12 @@ URL: linkedin.com/in/jenhsunhuang
 🤖 Agent: "I'll help generate a LinkedIn outreach message. Let me fetch the profile first."
 
 🔧 Agent using tool: mcp__linkedin__fetch_linkedin_profile
-   Input: {'profile_url': 'linkedin.com/in/jenhsunhuang'}
+   Input: {'profile_url': 'https://www.linkedin.com/in/jenhsun-huang'}
 
-  [Tool] Fetching profile: linkedin.com/in/jenhsunhuang
-  [Tool] ❌ Failed: API returned 503
+  [Tool] Fetching profile: https://www.linkedin.com/in/jenhsun-huang
+  [Tool] ❌ Failed: Profile not found
 
-🤖 Agent: "The profile fetch failed. The URL is missing the protocol. Let me try adding https://www."
+🤖 Agent: "The profile fetch failed. The username might have a typo - let me try removing the hyphen."
 
 🔧 Agent using tool: mcp__linkedin__fetch_linkedin_profile
    Input: {'profile_url': 'https://www.linkedin.com/in/jenhsunhuang'}
