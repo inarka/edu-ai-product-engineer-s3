@@ -74,8 +74,8 @@ You are an Evening Homepage Analysis Agent. Your goal is to analyze homepage his
 
 6. Save the Report:
    - After generating the complete report, use the `save_report` tool to save it.
-   - Pass the full markdown report content and the publisher name.
-   - The report will be automatically saved with a date-based filename.
+   - Pass the full markdown report content, the publisher name, and filename='evening_report'.
+   - The report will be automatically saved with format: YYYY-MM-DD_evening_report_publisher.md
    
 [RULES]
 - ALWAYS include article links in markdown format: `[Original Title](url)` for every article mentioned.
@@ -132,7 +132,7 @@ async def run_evening_analysis(publisher: str = "kurier"):
 
     try:
         async with ClaudeSDKClient(options=options) as client:
-            prompt = f"Analyze the homepage for {publisher} over the last 24 hours and generate the evening newsletter report."
+            prompt = f"Analyze the homepage for {publisher} over the last 24 hours and generate the evening newsletter report. Remember to use the save_report tool with filename='evening_report' when you complete the report."
 
             await client.query(prompt)
 

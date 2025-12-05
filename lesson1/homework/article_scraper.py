@@ -331,8 +331,8 @@ After completing your audit, produce your final markdown report. The report shou
 6. **Save the Report**:
    - After generating the complete audit report, use the `save_report` tool to save it.
    - Extract the publisher name from the URL (e.g., "tagesspiegel" from "tagesspiegel.de").
-   - Pass the full markdown report content and the publisher name.
-   - The report will be automatically saved with a date-based filename.
+   - Pass the full markdown report content, the publisher name, and filename='homepage_analysis'.
+   - The report will be automatically saved with format: YYYY-MM-DD_homepage_analysis_publisher.md
 
 ## Status Values (for technical tracking)
 - `ok` - Successfully completed audit
@@ -448,7 +448,7 @@ async def analyze_homepage(
 
 ## Publisher Information
 - Publisher name for saving reports: {publisher}
-- When using save_report tool, use "{publisher}" as the publisher parameter.
+- When using save_report tool, use publisher="{publisher}" and filename="homepage_analysis".
 """
     )
 

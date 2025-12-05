@@ -236,10 +236,11 @@ async def get_top_articles_for_period(args: dict[str, Any]) -> dict[str, Any]:
 
 @tool(
     "save_report",
-    "Save a report to the reports folder with date-based filename. Use this when you have completed generating a report.",
+    "Save a report to the reports folder with date-based filename. Use this when you have completed generating a report. ",
     {
         "report_content": str,
         "publisher": str,
+        "filename": str,
     },
 )
 async def save_report_tool(args: dict[str, Any]) -> dict[str, Any]:
@@ -254,7 +255,8 @@ async def save_report_tool(args: dict[str, Any]) -> dict[str, Any]:
     """
     report_content = args.get("report_content", "")
     publisher = args.get("publisher", "unknown")
-
+    filename = args.get("filename", "report")
+    
     if not report_content:
         return {
             "content": [
@@ -279,7 +281,7 @@ async def save_report_tool(args: dict[str, Any]) -> dict[str, Any]:
 
     try:
         # Use the utility function to save the report
-        report_path = save_report(report_content, publisher, REPORTS_DIR)
+        report_path = save_report(report_content, publisher, filename, REPORTS_DIR)
         return {
             "content": [
                 {

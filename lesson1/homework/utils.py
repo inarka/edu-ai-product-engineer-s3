@@ -71,7 +71,7 @@ def display_message(msg: UserMessage | AssistantMessage | ResultMessage) -> None
         print("\n✅ Analysis Complete.")
 
 
-def save_report(report_content: str, publisher: str, reports_dir: Path | None = None) -> Path:
+def save_report(report_content: str, publisher: str, filename: str, reports_dir: Path | None = None) -> Path:
     """
     Save the final report to the reports folder with date-based filename.
 
@@ -92,9 +92,9 @@ def save_report(report_content: str, publisher: str, reports_dir: Path | None = 
     # Ensure reports directory exists
     reports_dir.mkdir(exist_ok=True)
 
-    # Generate filename with date: YYYY-MM-DD_publisher.md
+    # Generate filename with date: YYYY-MM-DD_filename_publisher.md
     date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    filename = f"{date_str}_{publisher}.md"
+    filename = f"{date_str}_{filename}_{publisher}.md"
     filepath = reports_dir / filename
 
     # Write report content
