@@ -19,7 +19,7 @@ This course teaches you how to build AI products through 5 progressive workshops
 
 ```
 Workshop 1 (150 lines)     → Chained vs Agentic Workflows
-Workshop 2 (450 lines)     → Tool Mastery & Reflection Pattern
+Workshop 2 (450 lines)     → Building Reliable Agents
 Workshop 3 (900 lines)     → Multi-agent orchestration system
 Workshop 4 (1,200 lines)   → Evaluation framework & A/B testing
 Workshop 5 (2,500+ lines)  → Multi-modal capabilities (voice, code, UI)
@@ -42,7 +42,7 @@ edu-ai-product-engineer-s3/
 │   ├── verify_setup.py         (Setup verification script)
 │   ├── n8n.json                (No-code demo workflow)
 │   └── requirements.txt
-├── lesson2/                     (Tool Mastery & Reflection Pattern)
+├── lesson2/                     (Building Reliable Agents)
 │   ├── README.md               (Lesson overview)
 │   ├── research_agent_v2.py    (Main demo: Reflection pattern)
 │   ├── agent_raw_api.py        (Raw API implementation)
@@ -147,7 +147,7 @@ For complete submission guidelines, code quality standards, and best practices, 
 | Workshop | Topic | Duration | Homework |
 |----------|-------|----------|----------|
 | **1** | Chained vs Agentic Workflows | 2 hours | 3-4 hours |
-| **2** | Tool Mastery & Reflection Pattern | 2 hours | 4-5 hours |
+| **2** | Building Reliable Agents | 2 hours | 4-5 hours |
 | **3** | Multi-Agent Systems | 2 hours | 6-8 hours |
 | **4** | Eval-Driven Development | 2 hours | 5-6 hours |
 | **5** | Multi-Modal Capabilities | 2 hours | 8-10 hours |
