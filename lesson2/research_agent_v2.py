@@ -276,7 +276,7 @@ async def research_with_reflection(linkedin_url: str) -> dict:
             "Skill",
         ],
         # Enable skill discovery from project .claude/skills/ directory
-        setting_sources=["project"],
+        setting_sources=["user","project"],
         cwd=lesson2_dir,
         system_prompt=SYSTEM_PROMPT,
         max_turns=15,

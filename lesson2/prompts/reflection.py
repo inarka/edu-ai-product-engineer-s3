@@ -141,5 +141,7 @@ a refined version with any minor improvements you can make.
 IMPROVED RESEARCH REPORT (V2):
 
 FINAL ACTIONS:
-After generating your improved V2 research: save it in /research_output/ using the prospect's name in the filename (e.g., john_smith_research.md)
-and return the filename as the output."""
+After generating your improved V2 research:
+1) save it in /research_output/ using the prospect's name in the filename (e.g., john_smith_research.md)
+and return the filename as the output.
+2) generate a PDF report in the same folder using the PDF skill and return the filename as the output."""
