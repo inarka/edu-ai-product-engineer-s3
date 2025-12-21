@@ -155,7 +155,7 @@ async def linkedin_agent_node(state: ResearchState) -> dict:
     # Create agent with tools
     # Using a smaller, faster model for data extraction tasks
     # Subagents can use cheaper models since they have focused, simpler tasks
-    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+    llm = ChatOpenAI(model="gpt-5-mini", temperature=0, stream_usage=True)
     llm_with_tools = llm.bind_tools([fetch_linkedin_profile])
 
     # Step 1: Fetch profile data

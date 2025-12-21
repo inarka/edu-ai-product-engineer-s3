@@ -106,7 +106,7 @@ NEWS DATA:
 
     # Synthesis requires complex reasoning - use the most capable model
     # This is where we need the full power of gpt-5.2
-    llm = ChatOpenAI(model="gpt-5.2", temperature=0)
+    llm = ChatOpenAI(model="gpt-5.2", temperature=0, stream_usage=True)
 
     messages = [
         SystemMessage(content=SYNTHESIS_SYSTEM_PROMPT),
