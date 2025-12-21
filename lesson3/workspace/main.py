@@ -20,6 +20,7 @@ Environment variables required:
 import asyncio
 import argparse
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -66,9 +67,11 @@ async def run_research(
 
     # Configuration for this run
     # thread_id enables checkpointing and resumption
+    # Include timestamp to distinguish between different runs of the same URL
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     config = {
         "configurable": {
-            "thread_id": f"research-{linkedin_url}",
+            "thread_id": f"research-{timestamp}-{linkedin_url}",
         }
     }
 
@@ -209,9 +212,11 @@ async def demo_human_in_the_loop(linkedin_url: str, company_name: str = ""):
         "company_name": company_name,
     }
 
+    # Include timestamp to distinguish between different runs
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     config = {
         "configurable": {
-            "thread_id": f"research-hitl-{linkedin_url}",
+            "thread_id": f"research-hitl-{timestamp}-{linkedin_url}",
         }
     }
 
