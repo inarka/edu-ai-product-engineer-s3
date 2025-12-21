@@ -1,0 +1,10 @@
+# LangGraph and LangChain
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-openai>=0.3.0
+
+# Observability
+langsmith>=0.2.0
+
+# Environment variables
+python-dotenv>=1.0.0
