@@ -18,7 +18,7 @@ How Anthropic's production multi-agent system maps to course concepts.
 
 ### LangGraph Concept Mapping
 
-**Fan-Out/Fan-In (L3 Slide 16):**
+**Fan-Out/Fan-In (L3 Parallel Execution):**
 ```python
 # L3 Research Squad
 graph.add_edge("orchestrator", "linkedin_agent")
@@ -31,7 +31,7 @@ tasks = [subagent.explore(aspect) for aspect in aspects]
 results = await asyncio.gather(*tasks)  # Parallel execution
 ```
 
-**Model Optimization per Node (L3 Slide 25):**
+**Model Optimization per Node (L3 Architecture):**
 ```python
 # L3 pattern - different models per agent
 linkedin_agent: gpt-4.1-mini  # Cheaper, focused
@@ -45,7 +45,7 @@ citation_agent: Claude Sonnet 4  # Structured extraction
 
 **Result**: 90% improvement over single Opus agent.
 
-### The Subagents Pattern (L3 Slide 19)
+### The Subagents Pattern (L3 Multi-Agent Patterns)
 
 L3 teaches: "Central agent invokes specialists as tools"
 
@@ -55,19 +55,20 @@ Anthropic implements exactly this:
 - **Context isolation** = Each subagent gets focused prompt
 - **Parallel execution** = All subagents run concurrently
 
-### Decomposition Criteria Validation (L3 Slide 8)
+### Decomposition Criteria Validation (L3 When to Decompose)
 
-Anthropic's system meets all 5 criteria for decomposition:
+Anthropic's system meets multiple criteria for decomposition (L3 teaches 7 criteria):
 
 | L3 Criterion | Anthropic Implementation |
 |--------------|-------------------------|
-| 1. Unique Prompt/Context | Each subagent gets specific aspect to explore |
-| 2. Unique Tools | Subagents have search tools, citation agent has extraction tools |
-| 3. Different Domain Experts | Lead (strategy), Research (exploration), Citation (attribution) |
-| 4. Legal/Privacy Requirements | N/A (but isolated execution) |
-| 5. Model Optimization | Opus lead + Sonnet subagents = 90% improvement |
+| 1. Parallelization benefit | Subagents run concurrently |
+| 2. Context window efficiency | Each subagent gets focused prompt |
+| 3. Different domain experts | Lead (strategy), Research (exploration), Citation (attribution) |
+| 4. Time/cost optimization | Opus lead + Sonnet subagents = 90% improvement |
+| 5. Failure isolation | One subagent failing doesn't kill entire research |
+| 6. Reusability | Subagent pattern reused across queries |
 
-**Rule validation**: 5/5 criteria met → strong signal to decompose.
+**Rule validation**: 6/7 criteria met → strong signal to decompose.
 
 ---
 
@@ -102,7 +103,7 @@ Solution: Trace every:
   - Model response
 ```
 
-Maps directly to LangSmith tracing (L3 Slide 17).
+Maps directly to LangSmith tracing (L3 Observability).
 
 ### LLM-as-Judge Evaluation
 ```python
@@ -126,7 +127,7 @@ This extends L2's quality assessment patterns.
 |-----------------|-------------------|
 | Multi-agent > Single agent (L3) | 90% improvement with orchestration |
 | Model per node (L3) | Opus lead + Sonnet workers = better + cheaper |
-| Fan-out for parallelization (L3) | 90% time reduction with parallel subagents |
+| Fan-out for parallelization (L3) | Parallel subagents enable concurrent exploration |
 | Synthesis combines diverse results (L3) | Lead agent synthesizes subagent findings |
 
 ### Cost Efficiency Through Architecture
@@ -149,7 +150,7 @@ This extends L2's quality assessment patterns.
 
 2. **Model Selection**: Anthropic uses Opus for lead + Sonnet for subagents. How would you apply this to your homework? Which tasks warrant the most capable model?
 
-3. **Parallelization**: Anthropic achieved 90% time reduction through parallel execution. What are the risks of parallel fan-out? When might sequential be better?
+3. **Parallelization**: Anthropic achieved significant speedup through parallel execution. What are the risks of parallel fan-out? When might sequential be better?
 
 4. **Production Readiness**: Rainbow deployments and error handling aren't in the LangGraph tutorial. Why are they critical for production? How would you implement them?
 

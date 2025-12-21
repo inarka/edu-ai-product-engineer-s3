@@ -65,7 +65,7 @@ Poetiq's prompts use similar patterns:
 
 ### LangGraph Concept Mapping
 
-**Fan-Out/Fan-In (L3 Slide 16):**
+**Fan-Out/Fan-In (L3 Parallel Execution):**
 ```python
 # L3 Research Squad
 graph.add_edge("orchestrator", "linkedin_agent")
@@ -77,7 +77,7 @@ tasks = [asyncio.create_task(solve_coding(cfg)) for cfg in expert_configs]
 results = await asyncio.gather(*tasks)
 ```
 
-**Model Optimization per Node (L3 Slide 25):**
+**Model Optimization per Node (L3 Architecture):**
 ```python
 # L3 pattern - different models per agent
 linkedin_agent: gpt-4.1-mini  # Cheaper, focused
@@ -91,7 +91,7 @@ expert_3: Claude
 
 ### The Subagents Pattern at Scale
 
-L3 teaches the **Subagents pattern** (Slide 19): Central agent invokes specialists as tools.
+L3 teaches the **Subagents pattern** (Multi-Agent Patterns): Central agent invokes specialists as tools.
 
 Poetiq implements this at scale:
 - **Central orchestrator**: `solve_parallel_coding.py`
@@ -101,7 +101,7 @@ Poetiq implements this at scale:
 
 ### Diversity-First = Many-Model Thinking
 
-L3's **Pattern Selection Matrix** (Slide 20) emphasizes choosing patterns for distributed development and parallelization. Poetiq proves this works:
+L3's **Pattern Selection Matrix** emphasizes choosing patterns for distributed development and parallelization. Poetiq proves this works:
 
 ```
 L3 Teaching: "Use different models per agent for cost optimization"
@@ -139,15 +139,16 @@ This is exactly why L3's multi-agent patterns work — diversity of processing b
 
 ### Cost Efficiency Through Orchestration
 
-**Course Principle (L3 Slide 9)**: Only decompose when you meet 3+ criteria. Poetiq meets all 5:
+**Course Principle (L3 When to Decompose)**: Only decompose when you meet 3+ criteria. Poetiq meets multiple of the 7 criteria:
 
 | L3 Criterion | Poetiq Implementation |
 |--------------|----------------------|
-| 1. Unique Prompt/Context | Each expert has different seed/temperature |
-| 2. Unique Tools | Code execution sandbox per expert |
-| 3. Different Domain Experts | Different LLMs (Gemini, GPT, Claude) |
-| 4. Legal/Privacy Requirements | Isolated execution sandboxes |
-| 5. Model Optimization | Mix of models for cost/capability |
+| 1. Parallelization benefit | 8 experts run concurrently |
+| 2. Context window efficiency | Each expert has focused context |
+| 3. Different domain experts | Different LLMs (Gemini, GPT, Claude) |
+| 4. Time/cost optimization | Mix of models for cost/capability |
+| 5. Failure isolation | Isolated execution sandboxes |
+| 6. Reusability | Expert pattern reused across problems |
 
 **Result**:
 - Previous SOTA: $77.16/problem
@@ -160,7 +161,7 @@ This is exactly why L3's multi-agent patterns work — diversity of processing b
 
 1. **L2 Connection**: How does Poetiq's execution-based feedback compare to human-in-the-loop? What are the tradeoffs?
 
-2. **L3 Connection**: Why might 8 diverse experts with voting beat a single more powerful model? Connect to Scott Page's Diversity Prediction Theorem and L3's decomposition criteria.
+2. **L3 Connection**: Why might 8 diverse experts with voting beat a single more powerful model? Connect to Scott Page's Diversity Prediction Theorem and L3's 7 decomposition criteria.
 
 3. **Architecture Choice**: Poetiq chose code generation over direct answer prediction. How does this enable better reflection? What other domains could use "executable intermediate representations"?
 

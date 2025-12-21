@@ -34,7 +34,7 @@ A LangGraph-based multi-agent system for B2B prospect research. This demo accomp
 
 Subagents use cheaper/faster models (`gpt-5-mini`) for focused extraction tasks,
 while the synthesis agent uses the most capable model (`gpt-5.2`) for complex reasoning.
-This is one of the 5 decomposition criteria from the course - using appropriate models for different tasks.
+This is one of the 7 decomposition criteria from the course - using appropriate models for different tasks.
 
 ### Key Patterns Demonstrated
 
