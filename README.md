@@ -57,7 +57,17 @@ edu-ai-product-engineer-s3/
 │   ├── utils/
 │   │   └── observability.py    (Laminar integration)
 │   └── requirements.txt
-├── lesson3/                     (Coming soon)
+├── lesson3/                     (Multi-Agent Orchestration)
+│   ├── workspace/              (Research Squad demo code)
+│   │   ├── research_squad/    (Main implementation)
+│   │   │   ├── graph.py       (LangGraph StateGraph assembly)
+│   │   │   ├── state.py       (TypedDict state schema)
+│   │   │   └── nodes/         (Agent nodes: orchestrator, linkedin, company, news, synthesis)
+│   │   ├── main.py            (CLI runner with LangSmith)
+│   │   ├── check_setup.py     (Environment verification)
+│   │   └── requirements.txt   (langgraph, langsmith, tavily)
+│   └── homework/               (Content Review Squad assignment)
+│       └── content_review_squad/
 ├── lesson4/                     (Coming soon)
 └── lesson5/                     (Coming soon)
 ```
@@ -71,15 +81,30 @@ edu-ai-product-engineer-s3/
 - Git installed and configured
 
 ### Required Accounts (Free Tiers Available)
-1. **Anthropic API** - For Claude models
+1. **Anthropic API** - For Claude models (Lessons 1-2)
    - Sign up: https://console.anthropic.com
    - Get API key: https://console.anthropic.com/settings/keys
    - Free tier: $5 credit
 
-2. **EnrichLayer API** - For LinkedIn profile enrichment
+2. **OpenAI API** - For GPT models (Lesson 3+)
+   - Sign up: https://platform.openai.com
+   - Get API key: https://platform.openai.com/api-keys
+   - Used with LangGraph for multi-agent orchestration
+
+3. **EnrichLayer API** - For LinkedIn profile enrichment
    - Sign up: https://enrichlayer.com
    - Get API key: https://enrichlayer.com/dashboard/api-key/
    - Free tier: 100 requests/month
+
+4. **Tavily API** - For web search (Lesson 3+)
+   - Sign up: https://tavily.com
+   - Get API key: https://tavily.com/dashboard
+   - Free tier: 1,000 searches/month
+
+5. **LangSmith** - For observability (Lesson 3+, recommended)
+   - Sign up: https://smith.langchain.com
+   - Get API key from settings
+   - Free tier available
 
 ### Recommended Tools
 - **n8n** (optional) - For visual workflow demos
@@ -161,12 +186,12 @@ By the end of this course, you will be able to:
 ### Technical Skills
 - ✅ Implement agents using Claude Agent SDK
 - ✅ Build custom tools with MCP (Model Context Protocol)
-- ✅ Orchestrate multi-agent systems
+- ✅ Orchestrate multi-agent systems with LangGraph
+- ✅ Design StateGraph workflows with fan-out/fan-in patterns
+- ✅ Implement human-in-the-loop with interrupt patterns
+- ✅ Use LangSmith for multi-agent observability
 - ✅ Design evaluation frameworks for LLM outputs
 - ✅ Build multi-modal agents (voice, code generation, UI)
-- ✅ Integrate voice interfaces with AI agents
-- ✅ Create agents that write and execute code
-- ✅ Design conversational UI for agentic systems
 
 ### Product Skills
 - ✅ Make chained vs agentic architecture decisions
@@ -206,7 +231,10 @@ After completing this course, students have built:
 ### Documentation Links
 - [Anthropic Claude Docs](https://docs.anthropic.com)
 - [Claude Agent SDK Docs](https://github.com/anthropics/claude-agent-sdk)
+- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
+- [LangSmith Platform](https://smith.langchain.com)
 - [EnrichLayer API Docs](https://enrichlayer.com/docs)
+- [Tavily API Docs](https://tavily.com/docs)
 - [n8n Documentation](https://docs.n8n.io)
 
 ## Code of Conduct
