@@ -19,9 +19,9 @@ Example evaluation plan for a B2B sales research multi-agent system.
 
 ## Dataset Strategy
 
-**Total Test Cases**: 20
+**Total Test Cases**: 21
 
-### Happy Path (10 cases - 50%)
+### Happy Path (10 cases - 48%)
 | ID | Description | Key Validation |
 |----|-------------|----------------|
 | HP-1 | Tech CEO (Microsoft) | Should mention AI, cloud |
@@ -46,12 +46,15 @@ Example evaluation plan for a B2B sales research multi-agent system.
 | EC-6 | Minimal LinkedIn profile | Should handle limited data |
 | EC-7 | Stealth mode startup | Should handle missing data |
 
-### Adversarial Cases (3 cases - 15%)
+### Adversarial Cases (4 cases - 20%)
 | ID | Description | Key Validation |
 |----|-------------|----------------|
-| AD-1 | Invalid LinkedIn URL | Should return error gracefully |
-| AD-2 | Non-existent profile | Should indicate not found |
-| AD-3 | Malformed company name | Should handle gracefully |
+| AD-1 | **Company Mismatch** - User provides wrong company | Should FLAG mismatch, not silently reconcile |
+| AD-2 | Invalid LinkedIn URL | Should return error gracefully |
+| AD-3 | Non-existent profile | Should indicate not found |
+| AD-4 | Malformed company name | Should handle gracefully |
+
+> **Real-World Example (AD-1)**: We ran the agent with `--target bayramannakov --company Anthropic`, but Bayram actually works at onsa.ai. The agent gathered accurate LinkedIn data but **silently reconciled** the contradiction by writing "engaged with Anthropic via community work" instead of flagging the mismatch. All 9 evaluators passed, but the output was misleading. This case caught our blind spot.
 
 ## Evaluation Methods
 
@@ -62,8 +65,11 @@ Example evaluation plan for a B2B sales research multi-agent system.
 | Report Length | Automated | 200-2000 chars | 100% |
 | Research Quality | LLM-as-Judge | 5-point rubric | 4.0/5.0 |
 | Relevance | LLM-as-Judge | Matches target person | 4.0/5.0 |
+| **Input-Data Consistency** | **LLM-as-Judge** | **Report matches source data** | **100%** |
 | Latency | Performance | Under 30s | 95th %ile |
 | Token Efficiency | Performance | Under 10k tokens | 90th %ile |
+
+> **Critical**: The Input-Data Consistency evaluator catches the AD-1 company mismatch case. It uses an LLM to verify that report conclusions match the gathered source data, detecting when the agent silently reconciles contradictory information instead of flagging it.
 
 ## Evaluator Implementation
 
@@ -73,6 +79,7 @@ from evaluation.evaluators import (
     schema_evaluator,
     keyword_coverage_evaluator,
     quality_evaluator,
+    input_data_consistency_evaluator,  # NEW: catches company mismatch
     latency_evaluator,
 )
 
@@ -84,6 +91,7 @@ results = evaluate(
         schema_evaluator,
         keyword_coverage_evaluator,
         quality_evaluator,
+        input_data_consistency_evaluator,  # Critical for AD-1
         latency_evaluator,
     ],
     experiment_prefix="research_squad_v1",

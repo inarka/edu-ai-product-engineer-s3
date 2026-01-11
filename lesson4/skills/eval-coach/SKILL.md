@@ -1,3 +1,17 @@
+---
+name: eval-coach
+description: Guide users through building comprehensive AI evaluation strategies using Evaluation-Driven Development (EDD)
+metadata:
+  version: 1.0.0
+  author: AI Product Engineer School
+  triggers:
+    - eval
+    - evaluation
+    - testing strategy
+    - test cases
+    - LLM testing
+---
+
 # Eval Coach
 
 An Agent Skill for designing comprehensive AI evaluation strategies using Evaluation-Driven Development (EDD).
