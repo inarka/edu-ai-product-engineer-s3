@@ -17,10 +17,12 @@ import os
 import asyncio
 import argparse
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from deepagents import create_deep_agent
+from deepagents.backends import FilesystemBackend
 from langchain_core.tools import tool
 from langsmith import traceable
 import httpx
@@ -150,28 +152,31 @@ def analyze_company(company_name: str) -> dict:
 
 # === DEEP AGENT CONFIGURATION ===
 
-RESEARCH_SYSTEM_PROMPT = """You are an expert B2B sales researcher.
+RESEARCH_SYSTEM_PROMPT = """You are an expert B2B sales researcher with filesystem access.
 
-Your goal is to produce actionable intelligence for sales outreach.
+You have access to the project filesystem. File paths start with "/" (e.g., "/context/notes.md").
 
-## Your Approach
+## Your Workflow (follow exactly)
 
-1. **Plan First**: Use write_todos to break down the research task into steps.
-   - Adjust your plan based on what you discover
-   - Don't run all tools if you already have enough information
+### Step 1: Plan with write_todos
+Create your research plan using write_todos.
 
-2. **Manage Context**: For large research tasks:
-   - Write intermediate findings to files using the file system
-   - This prevents context overflow and enables resume capability
+### Step 2: Gather data and SAVE to files
+After EACH tool call, immediately save results to a file:
 
-3. **Delegate When Needed**: For specialized deep-dives:
-   - Spawn subagents with focused prompts
-   - Each subagent gets isolated context (more efficient)
+1. Call fetch_linkedin(...)
+2. Then call write_file("/context/linkedin_profile.md", "# LinkedIn Profile\\n" + results)
 
-4. **Synthesize Insights**: Focus on:
-   - Pain points relevant to our solution
-   - Recent changes that create opportunity
-   - Specific talking points for outreach
+3. Call web_search(...)
+4. Then call write_file("/context/news_findings.md", "# Recent News\\n" + results)
+
+5. Call analyze_company(...)
+6. Then call write_file("/context/company_analysis.md", "# Company Analysis\\n" + results)
+
+### Step 3: Write final report
+After gathering all data, write your synthesis:
+
+write_file("/artifacts/final_report.md", "# Sales Intelligence Report\\n...")
 
 ## Output Format
 
@@ -180,6 +185,9 @@ Your final report should include:
 - Key Insights (bulleted list)
 - Recommended Talking Points (for sales call)
 - Sources (list of data sources used)
+
+## IMPORTANT
+You MUST call write_file after each data gathering step.
 """
 
 # Subagent configurations for specialized research
@@ -216,23 +224,40 @@ Prioritize recency and relevance to B2B sales.""",
 }
 
 
+# Workspace directory for file system context
+WORKSPACE_DIR = Path(__file__).parent / "research_workspace"
+
+
 def create_deep_research_agent():
     """Create and configure the Deep Research Agent.
 
     This agent uses:
     - Dynamic planning (write_todos)
-    - File system for context management
+    - File system for context management (writes to ./research_workspace/)
     - Subagents for specialized research
+
+    The FilesystemBackend enables the agent to:
+    - Write intermediate findings to files (avoids context overflow)
+    - Read back context when needed
+    - Persist todos and artifacts locally
 
     Returns:
         Configured DeepAgent CompiledStateGraph
     """
+    # Ensure workspace directory exists
+    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Configure filesystem backend for local file storage
+    # virtual_mode=True ensures /path resolves to workspace/path (not system root)
+    backend = FilesystemBackend(root_dir=str(WORKSPACE_DIR), virtual_mode=True)
+
     agent = create_deep_agent(
         name="research-orchestrator",
         model="anthropic:claude-sonnet-4-5-20250929",  # Main orchestrator
         system_prompt=RESEARCH_SYSTEM_PROMPT,
         tools=[fetch_linkedin, web_search, analyze_company],
         subagents=[LINKEDIN_SPECIALIST, NEWS_SPECIALIST],
+        backend=backend,  # Enable file system context management
     )
 
     return agent
@@ -283,11 +308,43 @@ async def run_research(
     return result
 
 
+def print_workspace_files() -> None:
+    """Show files created in the workspace directory."""
+    print("\n" + "=" * 60)
+    print("WORKSPACE FILES (File System Context)")
+    print("=" * 60)
+    print(f"Location: {WORKSPACE_DIR}")
+    print("-" * 60)
+
+    if not WORKSPACE_DIR.exists():
+        print("  (workspace not created yet)")
+        return
+
+    files_found = False
+    for path in sorted(WORKSPACE_DIR.rglob("*")):
+        if path.is_file():
+            files_found = True
+            rel_path = path.relative_to(WORKSPACE_DIR)
+            size = path.stat().st_size
+            print(f"  {rel_path} ({size} bytes)")
+
+    if not files_found:
+        print("  (no files created yet)")
+
+
 def print_results(result: dict[str, Any]) -> None:
     """Pretty print research results."""
     print("\n" + "=" * 60)
     print("RESEARCH RESULTS")
     print("=" * 60)
+
+    # Check for files in agent state (StateBackend stores files here)
+    files_in_state = result.get("files", {})
+    if files_in_state:
+        print("\n--- Files in Agent State ---")
+        for path, content in files_in_state.items():
+            preview = content[:100] + "..." if len(content) > 100 else content
+            print(f"  {path}: {preview}")
 
     # The real SDK returns messages in a specific format
     messages = result.get("messages", [])
@@ -357,6 +414,9 @@ def main():
     ))
 
     print_results(result)
+
+    # Show what files the agent created in the workspace
+    print_workspace_files()
 
     # Print LangSmith link
     print(f"\nView trace in LangSmith: https://smith.langchain.com")
