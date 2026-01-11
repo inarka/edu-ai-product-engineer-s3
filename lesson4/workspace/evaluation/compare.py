@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 
 from langsmith import Client
-from langsmith.evaluation import evaluate
+from langsmith.evaluation import aevaluate
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -100,7 +100,7 @@ async def run_comparison(
             config = {"configurable": {"thread_id": f"eval-{inputs.get('linkedin_url', 'test')}"}}
             return await langgraph_agent.ainvoke(inputs, config)
 
-        langgraph_results = evaluate(
+        langgraph_results = await aevaluate(
             langgraph_invoke,
             data=dataset_name,
             evaluators=evaluators,
@@ -122,7 +122,7 @@ async def run_comparison(
             company = inputs.get("company_name", "")
             return await deep_agent.run(f"Research {target} at {company}")
 
-        deep_agent_results = evaluate(
+        deep_agent_results = await aevaluate(
             deep_agent_invoke,
             data=dataset_name,
             evaluators=evaluators,

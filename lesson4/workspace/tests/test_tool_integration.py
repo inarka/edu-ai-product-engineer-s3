@@ -31,7 +31,7 @@ class TestFetchLinkedInLive:
         from deep_research_agent import fetch_linkedin
 
         # Use a well-known public profile
-        result = fetch_linkedin("https://linkedin.com/in/satlonaderr")
+        result = fetch_linkedin.invoke({"url": "https://linkedin.com/in/satlonaderr"})
 
         assert isinstance(result, dict)
         # API might return error (404, rate limit) or valid data
@@ -50,7 +50,7 @@ class TestFetchLinkedInLive:
         """Invalid URL should return error gracefully"""
         from deep_research_agent import fetch_linkedin
 
-        result = fetch_linkedin("not-a-valid-url")
+        result = fetch_linkedin.invoke({"url": "not-a-valid-url"})
 
         assert isinstance(result, dict)
         # Should either have error or mock data
@@ -70,7 +70,7 @@ class TestWebSearchLive:
         """Search for a known topic returns results"""
         from deep_research_agent import web_search
 
-        results = web_search("Microsoft AI announcements 2024", max_results=3)
+        results = web_search.invoke({"query": "Microsoft AI announcements 2024", "max_results": 3})
 
         assert isinstance(results, list)
         assert len(results) > 0
@@ -83,7 +83,7 @@ class TestWebSearchLive:
         """max_results parameter limits response"""
         from deep_research_agent import web_search
 
-        results = web_search("Python programming", max_results=2)
+        results = web_search.invoke({"query": "Python programming", "max_results": 2})
 
         assert len(results) <= 2
 
@@ -97,7 +97,7 @@ class TestAnalyzeCompanyLive:
         """analyze_company returns structured data"""
         from deep_research_agent import analyze_company
 
-        result = analyze_company("Microsoft")
+        result = analyze_company.invoke({"company_name": "Microsoft"})
 
         assert isinstance(result, dict)
         assert result.get("name") == "Microsoft"
@@ -108,7 +108,7 @@ class TestAnalyzeCompanyLive:
         """Unknown company still returns structured data"""
         from deep_research_agent import analyze_company
 
-        result = analyze_company("XYZ Unknown Company 12345")
+        result = analyze_company.invoke({"company_name": "XYZ Unknown Company 12345"})
 
         assert isinstance(result, dict)
         assert "name" in result
@@ -128,11 +128,11 @@ class TestToolWorkflowLive:
         from deep_research_agent import fetch_linkedin, analyze_company
 
         # Step 1: Get LinkedIn data
-        linkedin = fetch_linkedin("https://linkedin.com/in/satyanadella")
+        linkedin = fetch_linkedin.invoke({"url": "https://linkedin.com/in/satyanadella"})
 
         # Step 2: Analyze their company
         company_name = linkedin.get("company", "Microsoft")
-        company = analyze_company(company_name)
+        company = analyze_company.invoke({"company_name": company_name})
 
         # Both should return valid data
         assert isinstance(linkedin, dict)
@@ -144,10 +144,10 @@ class TestToolWorkflowLive:
         from deep_research_agent import web_search, analyze_company
 
         # Step 1: Search for company news
-        results = web_search("NVIDIA AI chips 2024", max_results=2)
+        results = web_search.invoke({"query": "NVIDIA AI chips 2024", "max_results": 2})
 
         # Step 2: Analyze the company
-        company = analyze_company("NVIDIA")
+        company = analyze_company.invoke({"company_name": "NVIDIA"})
 
         # Both should return valid data
         assert isinstance(results, list)

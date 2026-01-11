@@ -63,59 +63,62 @@ class TestAgentWorkflowLive:
 class TestAgentWorkflowMocked:
     """Mocked tests for agent workflow (no API needed)."""
 
-    @patch("deep_research_agent.DeepAgent")
-    def test_agent_run_called_with_task(self, mock_agent_class):
-        """Agent.run() is called with constructed task"""
+    @patch("deep_research_agent.create_deep_agent")
+    def test_agent_ainvoke_called_with_task(self, mock_create_agent):
+        """Agent.ainvoke() is called with constructed task"""
         from deep_research_agent import run_research
 
         mock_agent = MagicMock()
-        mock_result = {"output": "Test report", "todos": []}
-        mock_agent.run = AsyncMock(return_value=mock_result)
-        mock_agent_class.return_value = mock_agent
+        mock_result = {"messages": [{"role": "assistant", "content": "Test report"}]}
+        mock_agent.ainvoke = AsyncMock(return_value=mock_result)
+        mock_create_agent.return_value = mock_agent
 
         asyncio.run(run_research(
             target="test-target",
             company="TestCo",
         ))
 
-        # Verify run was called
-        mock_agent.run.assert_called_once()
-        call_args = mock_agent.run.call_args[0][0]
-        assert "test-target" in call_args
-        assert "TestCo" in call_args
+        # Verify ainvoke was called
+        mock_agent.ainvoke.assert_called_once()
+        call_args = mock_agent.ainvoke.call_args[0][0]
+        assert "messages" in call_args
+        assert "test-target" in call_args["messages"][0]["content"]
+        assert "TestCo" in call_args["messages"][0]["content"]
 
-    @patch("deep_research_agent.DeepAgent")
-    def test_result_contains_todos_field(self, mock_agent_class):
-        """Result should include todos (planning trace)"""
+    @patch("deep_research_agent.create_deep_agent")
+    def test_result_contains_messages_field(self, mock_create_agent):
+        """Result should include messages (conversation trace)"""
         from deep_research_agent import run_research
 
         mock_agent = MagicMock()
         mock_result = {
-            "output": "Test report",
-            "todos": [{"task": "Research LinkedIn", "completed": True}]
+            "messages": [
+                {"role": "user", "content": "Research test"},
+                {"role": "assistant", "content": "Final report"}
+            ]
         }
-        mock_agent.run = AsyncMock(return_value=mock_result)
-        mock_agent_class.return_value = mock_agent
+        mock_agent.ainvoke = AsyncMock(return_value=mock_result)
+        mock_create_agent.return_value = mock_agent
 
         result = asyncio.run(run_research(target="test"))
 
-        assert "todos" in result
-        assert len(result["todos"]) > 0
+        assert "messages" in result
+        assert len(result["messages"]) > 0
 
-    @patch("deep_research_agent.DeepAgent")
-    def test_result_contains_output_field(self, mock_agent_class):
-        """Result should include output (final report)"""
+    @patch("deep_research_agent.create_deep_agent")
+    def test_result_messages_contain_content(self, mock_create_agent):
+        """Result messages should include content (final report)"""
         from deep_research_agent import run_research
 
         mock_agent = MagicMock()
-        mock_result = {"output": "Final research report"}
-        mock_agent.run = AsyncMock(return_value=mock_result)
-        mock_agent_class.return_value = mock_agent
+        mock_result = {"messages": [{"role": "assistant", "content": "Final research report"}]}
+        mock_agent.ainvoke = AsyncMock(return_value=mock_result)
+        mock_create_agent.return_value = mock_agent
 
         result = asyncio.run(run_research(target="test"))
 
-        assert "output" in result
-        assert len(result["output"]) > 0
+        assert "messages" in result
+        assert result["messages"][-1]["content"] == "Final research report"
 
 
 # === PRINT RESULTS TESTS ===
@@ -124,28 +127,23 @@ class TestPrintResults:
     """Tests for print_results utility function."""
 
     def test_handles_minimal_result(self, capsys):
-        """print_results handles minimal output dict"""
+        """print_results handles minimal output dict with messages"""
         from deep_research_agent import print_results
 
-        print_results({"output": "Simple report"})
+        print_results({"messages": [{"role": "assistant", "content": "Simple report"}]})
 
         captured = capsys.readouterr()
         assert "Simple report" in captured.out
         assert "RESULTS" in captured.out
 
     def test_handles_full_result(self, capsys):
-        """print_results handles full output with todos and files"""
+        """print_results handles full output with multiple messages"""
         from deep_research_agent import print_results
 
         result = {
-            "output": "Final report",
-            "todos": [
-                {"task": "Research LinkedIn", "completed": True},
-                {"task": "Analyze company", "completed": True},
-            ],
-            "files_written": ["research_notes.md"],
-            "subagent_calls": [
-                {"agent": "linkedin-analyst", "task": "Deep dive on profile"}
+            "messages": [
+                {"role": "user", "content": "Research test"},
+                {"role": "assistant", "content": "Final report with insights"},
             ],
         }
 
@@ -153,10 +151,8 @@ class TestPrintResults:
 
         captured = capsys.readouterr()
         assert "Final report" in captured.out
-        assert "Execution Plan" in captured.out
-        assert "Research LinkedIn" in captured.out
-        assert "research_notes.md" in captured.out
-        assert "linkedin-analyst" in captured.out
+        assert "FINAL REPORT" in captured.out
+        assert "Total messages" in captured.out
 
     def test_handles_empty_result(self, capsys):
         """print_results handles empty dict"""

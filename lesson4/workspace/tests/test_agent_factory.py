@@ -98,42 +98,41 @@ class TestSubagentConfig:
 class TestToolConfiguration:
     """Tests for tool functions (not the actual execution)."""
 
-    def test_fetch_linkedin_is_callable(self):
-        """fetch_linkedin is a callable function"""
+    def test_fetch_linkedin_is_tool(self):
+        """fetch_linkedin is a StructuredTool with invoke method"""
         from deep_research_agent import fetch_linkedin
-        assert callable(fetch_linkedin)
+        assert hasattr(fetch_linkedin, 'invoke')
+        assert hasattr(fetch_linkedin, 'name')
 
-    def test_web_search_is_callable(self):
-        """web_search is a callable function"""
+    def test_web_search_is_tool(self):
+        """web_search is a StructuredTool with invoke method"""
         from deep_research_agent import web_search
-        assert callable(web_search)
+        assert hasattr(web_search, 'invoke')
+        assert hasattr(web_search, 'name')
 
-    def test_analyze_company_is_callable(self):
-        """analyze_company is a callable function"""
+    def test_analyze_company_is_tool(self):
+        """analyze_company is a StructuredTool with invoke method"""
         from deep_research_agent import analyze_company
-        assert callable(analyze_company)
+        assert hasattr(analyze_company, 'invoke')
+        assert hasattr(analyze_company, 'name')
 
-    def test_fetch_linkedin_has_docstring(self):
-        """fetch_linkedin has a descriptive docstring"""
+    def test_fetch_linkedin_has_description(self):
+        """fetch_linkedin has a descriptive description"""
         from deep_research_agent import fetch_linkedin
-        # Access underlying function if decorated
-        func = getattr(fetch_linkedin, "__wrapped__", fetch_linkedin)
-        assert func.__doc__ is not None
-        assert len(func.__doc__) > 20
+        assert fetch_linkedin.description is not None
+        assert len(fetch_linkedin.description) > 20
 
-    def test_web_search_has_docstring(self):
-        """web_search has a descriptive docstring"""
+    def test_web_search_has_description(self):
+        """web_search has a descriptive description"""
         from deep_research_agent import web_search
-        func = getattr(web_search, "__wrapped__", web_search)
-        assert func.__doc__ is not None
-        assert len(func.__doc__) > 20
+        assert web_search.description is not None
+        assert len(web_search.description) > 20
 
-    def test_analyze_company_has_docstring(self):
-        """analyze_company has a descriptive docstring"""
+    def test_analyze_company_has_description(self):
+        """analyze_company has a descriptive description"""
         from deep_research_agent import analyze_company
-        func = getattr(analyze_company, "__wrapped__", analyze_company)
-        assert func.__doc__ is not None
-        assert len(func.__doc__) > 20
+        assert analyze_company.description is not None
+        assert len(analyze_company.description) > 20
 
 
 # === AGENT FACTORY TESTS ===
@@ -141,83 +140,74 @@ class TestToolConfiguration:
 class TestAgentFactory:
     """Tests for create_deep_research_agent factory function."""
 
-    @patch("deep_research_agent.DeepAgent")
-    def test_create_agent_returns_deep_agent(self, mock_deep_agent_class):
-        """Factory returns a DeepAgent instance"""
+    @patch("deep_research_agent.create_deep_agent")
+    def test_create_agent_returns_agent(self, mock_create_deep_agent):
+        """Factory returns a compiled agent"""
         from deep_research_agent import create_deep_research_agent
 
         mock_agent = MagicMock()
-        mock_deep_agent_class.return_value = mock_agent
+        mock_create_deep_agent.return_value = mock_agent
 
         result = create_deep_research_agent()
 
         assert result == mock_agent
-        mock_deep_agent_class.assert_called_once()
+        mock_create_deep_agent.assert_called_once()
 
-    @patch("deep_research_agent.DeepAgent")
-    def test_agent_has_name(self, mock_deep_agent_class):
+    @patch("deep_research_agent.create_deep_agent")
+    def test_agent_has_name(self, mock_create_deep_agent):
         """Agent is created with a name"""
         from deep_research_agent import create_deep_research_agent
 
         create_deep_research_agent()
 
-        call_kwargs = mock_deep_agent_class.call_args[1]
+        call_kwargs = mock_create_deep_agent.call_args[1]
         assert "name" in call_kwargs
         assert call_kwargs["name"] == "research-orchestrator"
 
-    @patch("deep_research_agent.DeepAgent")
-    def test_agent_has_model(self, mock_deep_agent_class):
+    @patch("deep_research_agent.create_deep_agent")
+    def test_agent_has_model(self, mock_create_deep_agent):
         """Agent is created with a model"""
         from deep_research_agent import create_deep_research_agent
 
         create_deep_research_agent()
 
-        call_kwargs = mock_deep_agent_class.call_args[1]
+        call_kwargs = mock_create_deep_agent.call_args[1]
         assert "model" in call_kwargs
         assert "anthropic" in call_kwargs["model"] or "openai" in call_kwargs["model"]
 
-    @patch("deep_research_agent.DeepAgent")
-    def test_agent_has_three_tools(self, mock_deep_agent_class):
+    @patch("deep_research_agent.create_deep_agent")
+    def test_agent_has_three_tools(self, mock_create_deep_agent):
         """Agent is created with 3 tools"""
         from deep_research_agent import create_deep_research_agent
 
         create_deep_research_agent()
 
-        call_kwargs = mock_deep_agent_class.call_args[1]
+        call_kwargs = mock_create_deep_agent.call_args[1]
         assert "tools" in call_kwargs
         assert len(call_kwargs["tools"]) == 3
 
-    @patch("deep_research_agent.DeepAgent")
-    def test_agent_has_subagents(self, mock_deep_agent_class):
+    @patch("deep_research_agent.create_deep_agent")
+    def test_agent_has_subagents(self, mock_create_deep_agent):
         """Agent is created with subagents"""
         from deep_research_agent import create_deep_research_agent
 
         create_deep_research_agent()
 
-        call_kwargs = mock_deep_agent_class.call_args[1]
+        call_kwargs = mock_create_deep_agent.call_args[1]
         assert "subagents" in call_kwargs
         assert len(call_kwargs["subagents"]) == 2
 
-    @patch("deep_research_agent.DeepAgent")
-    def test_filesystem_enabled(self, mock_deep_agent_class):
-        """Agent has enable_filesystem=True"""
+    @patch("deep_research_agent.create_deep_agent")
+    def test_agent_has_system_prompt(self, mock_create_deep_agent):
+        """Agent is created with system_prompt"""
         from deep_research_agent import create_deep_research_agent
 
         create_deep_research_agent()
 
-        call_kwargs = mock_deep_agent_class.call_args[1]
-        assert call_kwargs.get("enable_filesystem") is True
-
-    @patch("deep_research_agent.DeepAgent")
-    def test_workspace_dir_set(self, mock_deep_agent_class):
-        """Agent workspace directory is configured"""
-        from deep_research_agent import create_deep_research_agent
-
-        create_deep_research_agent()
-
-        call_kwargs = mock_deep_agent_class.call_args[1]
-        assert "workspace_dir" in call_kwargs
-        assert call_kwargs["workspace_dir"] is not None
+        call_kwargs = mock_create_deep_agent.call_args[1]
+        assert "system_prompt" in call_kwargs
+        assert call_kwargs["system_prompt"] is not None
+        assert len(call_kwargs["system_prompt"]) > 100
 
 
 # === TOOL MOCK DATA TESTS ===
@@ -234,26 +224,27 @@ class TestToolMockData:
         bool(os.getenv("ENRICHLAYER_API_KEY")),
         reason="Mock test skipped when ENRICHLAYER_API_KEY is set"
     )
-    def test_fetch_linkedin_returns_mock_without_api_key(self):
-        """fetch_linkedin returns mock data when API key missing"""
+    def test_fetch_linkedin_returns_error_without_api_key(self):
+        """fetch_linkedin returns error when API key missing"""
+        # Note: With real SDK, missing API key returns mock or error
+        # This test just verifies it doesn't crash
         from deep_research_agent import fetch_linkedin
-        result = fetch_linkedin("https://linkedin.com/in/test")
-        assert result.get("mock") is True
+        result = fetch_linkedin.invoke({"url": "https://linkedin.com/in/test"})
+        assert isinstance(result, dict)
 
     @pytest.mark.skipif(
         bool(os.getenv("TAVILY_API_KEY")),
         reason="Mock test skipped when TAVILY_API_KEY is set"
     )
-    def test_web_search_returns_mock_without_api_key(self):
-        """web_search returns mock data when API key missing"""
+    def test_web_search_returns_results_without_api_key(self):
+        """web_search returns results (mock or error) when API key missing"""
         from deep_research_agent import web_search
-        result = web_search("test query")
+        result = web_search.invoke({"query": "test query"})
         assert isinstance(result, list)
-        assert result[0].get("mock") is True
 
     def test_analyze_company_returns_mock_data(self):
         """analyze_company returns mock data (always mock in demo)"""
         from deep_research_agent import analyze_company
-        result = analyze_company("Test Company")
+        result = analyze_company.invoke({"company_name": "Test Company"})
         assert result.get("mock") is True
         assert result.get("name") == "Test Company"

@@ -142,16 +142,16 @@ class TestDatasetCreationMocked:
 class TestComparisonMocked:
     """Mocked tests for experiment comparison."""
 
-    @patch("evaluation.compare.evaluate")
-    def test_comparison_runs_both_experiments(self, mock_evaluate):
+    @patch("evaluation.compare.aevaluate")
+    def test_comparison_runs_both_experiments(self, mock_aevaluate):
         """run_comparison evaluates both LangGraph and Deep Agents"""
         # This is a structural test - verify the comparison
-        # calls evaluate twice with different prefixes
-        mock_evaluate.return_value = MagicMock()
+        # calls aevaluate twice with different prefixes
+        mock_aevaluate.return_value = MagicMock()
 
-        # The actual comparison module would call evaluate twice
+        # The actual comparison module would call aevaluate twice
         # We just verify the structure here
-        assert callable(mock_evaluate)
+        assert callable(mock_aevaluate)
 
     def test_evaluators_list_correct_count(self):
         """ALL_EVALUATORS has expected count"""

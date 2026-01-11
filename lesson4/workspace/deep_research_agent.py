@@ -20,8 +20,8 @@ from datetime import datetime
 from typing import Any
 
 from dotenv import load_dotenv
-from deepagents import DeepAgent
-from deepagents.tools import tool
+from deepagents import create_deep_agent
+from langchain_core.tools import tool
 from langsmith import traceable
 import httpx
 
@@ -216,7 +216,7 @@ Prioritize recency and relevance to B2B sales.""",
 }
 
 
-def create_deep_research_agent() -> DeepAgent:
+def create_deep_research_agent():
     """Create and configure the Deep Research Agent.
 
     This agent uses:
@@ -225,17 +225,14 @@ def create_deep_research_agent() -> DeepAgent:
     - Subagents for specialized research
 
     Returns:
-        Configured DeepAgent instance
+        Configured DeepAgent CompiledStateGraph
     """
-    agent = DeepAgent(
+    agent = create_deep_agent(
         name="research-orchestrator",
         model="anthropic:claude-sonnet-4-5-20250929",  # Main orchestrator
         system_prompt=RESEARCH_SYSTEM_PROMPT,
         tools=[fetch_linkedin, web_search, analyze_company],
         subagents=[LINKEDIN_SPECIALIST, NEWS_SPECIALIST],
-        # Enable file system for context management
-        enable_filesystem=True,
-        workspace_dir=os.getenv("DEEPAGENTS_WORKSPACE", "/tmp/deepagents"),
     )
 
     return agent
@@ -278,8 +275,10 @@ async def run_research(
     print(f"Timestamp: {datetime.now().isoformat()}")
     print("-" * 60)
 
-    # Run the agent
-    result = await agent.run(task)
+    # Run the agent using invoke with messages format
+    result = await agent.ainvoke({
+        "messages": [{"role": "user", "content": task}]
+    })
 
     return result
 
@@ -290,31 +289,35 @@ def print_results(result: dict[str, Any]) -> None:
     print("RESEARCH RESULTS")
     print("=" * 60)
 
-    # Print todos (planning trace)
-    if "todos" in result:
-        print("\n--- Execution Plan (write_todos) ---")
-        for todo in result["todos"]:
-            status = "x" if todo.get("completed") else " "
-            print(f"[{status}] {todo['task']}")
+    # The real SDK returns messages in a specific format
+    messages = result.get("messages", [])
 
-    # Print files written (context management)
-    if "files_written" in result:
-        print("\n--- Files Written (context management) ---")
-        for f in result["files_written"]:
-            print(f"  - {f}")
+    # Print message count
+    print(f"\nTotal messages in conversation: {len(messages)}")
 
-    # Print subagent calls
-    if "subagent_calls" in result:
-        print("\n--- Subagent Delegations ---")
-        for call in result["subagent_calls"]:
-            print(f"  - {call['agent']}: {call['task']}")
+    # Print tool calls (if visible in messages)
+    tool_calls = []
+    for msg in messages:
+        if hasattr(msg, "tool_calls") and msg.tool_calls:
+            tool_calls.extend(msg.tool_calls)
+        elif isinstance(msg, dict) and msg.get("tool_calls"):
+            tool_calls.extend(msg["tool_calls"])
 
-    # Print final report
-    if "output" in result:
+    if tool_calls:
+        print("\n--- Tool Calls ---")
+        for tc in tool_calls:
+            name = tc.get("name", tc.get("function", {}).get("name", "unknown"))
+            print(f"  - {name}")
+
+    # Print final response (last AI message)
+    if messages:
+        final_msg = messages[-1]
+        content = getattr(final_msg, "content", None) or (final_msg.get("content") if isinstance(final_msg, dict) else str(final_msg))
+
         print("\n" + "=" * 60)
         print("FINAL REPORT")
         print("=" * 60)
-        print(result["output"])
+        print(content if content else "No content in final message")
 
     print("\n" + "=" * 60)
     print("Research complete!")
