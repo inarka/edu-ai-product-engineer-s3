@@ -157,8 +157,8 @@ class TestComparisonMocked:
         """ALL_EVALUATORS has expected count"""
         from evaluation.evaluators import ALL_EVALUATORS
 
-        # 4 automated + 2 LLM judge + 2 performance + 1 human flag
-        assert len(ALL_EVALUATORS) == 9
+        # 4 automated + 3 LLM judge + 2 performance + 1 human flag
+        assert len(ALL_EVALUATORS) == 10
 
 
 # === CONFIGURATION TESTS ===

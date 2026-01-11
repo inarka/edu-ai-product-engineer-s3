@@ -424,16 +424,16 @@ class TestEvaluatorSets:
         assert len(AUTOMATED_EVALUATORS) == 4
 
     def test_llm_judge_evaluators_count(self):
-        """LLM_JUDGE_EVALUATORS has 2 evaluators"""
-        assert len(LLM_JUDGE_EVALUATORS) == 2
+        """LLM_JUDGE_EVALUATORS has 3 evaluators (quality, relevance, input_data_consistency)"""
+        assert len(LLM_JUDGE_EVALUATORS) == 3
 
     def test_performance_evaluators_count(self):
         """PERFORMANCE_EVALUATORS has 2 evaluators"""
         assert len(PERFORMANCE_EVALUATORS) == 2
 
     def test_all_evaluators_count(self):
-        """ALL_EVALUATORS has 9 evaluators total"""
-        assert len(ALL_EVALUATORS) == 9
+        """ALL_EVALUATORS has 10 evaluators total"""
+        assert len(ALL_EVALUATORS) == 10
 
     def test_evaluators_are_callable(self):
         """All evaluators are callable functions"""

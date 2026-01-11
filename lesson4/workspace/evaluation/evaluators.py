@@ -307,6 +307,72 @@ Return JSON: {{"score": 1-5, "reasoning": "brief explanation"}}
         }
 
 
+def input_data_consistency_evaluator(run: Run, example: Example) -> dict:
+    """Check if report conclusions match the gathered source data.
+
+    Tier 2 (LLM-as-Judge): Detects when agent silently reconciles
+    contradictory information instead of flagging it.
+    Cost: ~$0.02-0.05 per run
+
+    Example: User says "research X at Company A" but LinkedIn shows
+    X works at Company B. Agent should flag this, not silently reconcile.
+    """
+    inputs = run.inputs or {}
+    output = run.outputs or {}
+
+    target = inputs.get("linkedin_url", "") or inputs.get("target", "")
+    company = inputs.get("company_name", "") or inputs.get("company", "")
+    report = output.get("final_report", "") or output.get("output", "")
+
+    if not report or not company:
+        return {
+            "key": "input_data_consistency",
+            "score": 1.0,
+            "comment": "No company to verify",
+        }
+
+    judge_prompt = f"""Analyze this research report for input-data consistency.
+
+USER INPUT:
+- Target: {target}
+- Company claimed: {company}
+
+REPORT:
+{report[:3000]}
+
+QUESTIONS:
+1. Does the report confirm the person actually works at "{company}"?
+2. If LinkedIn/source data shows a DIFFERENT company, did the agent:
+   a) Explicitly flag the mismatch? (GOOD)
+   b) Silently reconcile by finding tangential connections? (BAD)
+   c) Ignore the mismatch entirely? (BAD)
+
+SCORING:
+- 1.0: Data matches OR agent explicitly flagged mismatch
+- 0.5: Minor discrepancy, agent partially addressed
+- 0.0: Major mismatch silently reconciled (hallucination risk)
+
+Return JSON: {{"score": 0.0, "mismatch_found": true, "reasoning": "explanation"}}
+Use 0.0, 0.5, or 1.0 for score. Set mismatch_found to true if there's a discrepancy.
+"""
+
+    try:
+        llm = ChatOpenAI(model=JUDGE_MODEL, temperature=0)
+        response = llm.invoke(judge_prompt)
+        result = json.loads(response.content)
+        return {
+            "key": "input_data_consistency",
+            "score": result.get("score", 0.5),
+            "comment": f"Mismatch: {result.get('mismatch_found', 'unknown')} - {result.get('reasoning', '')}",
+        }
+    except Exception as e:
+        return {
+            "key": "input_data_consistency",
+            "score": 0.5,
+            "comment": f"Judge error: {str(e)}",
+        }
+
+
 # === PERFORMANCE EVALUATORS ===
 # These measure efficiency, not quality
 
@@ -405,6 +471,7 @@ AUTOMATED_EVALUATORS = [
 LLM_JUDGE_EVALUATORS = [
     quality_evaluator,
     relevance_evaluator,
+    input_data_consistency_evaluator,
 ]
 
 PERFORMANCE_EVALUATORS = [

@@ -133,28 +133,31 @@ class TestAnalyzeCompany:
 
 
 class TestToolDocstrings:
-    """Tests for tool documentation (critical for LLM understanding)."""
+    """Tests for tool documentation (critical for LLM understanding).
+
+    Note: StructuredTool objects store docstrings in .description, not .__doc__
+    """
 
     def test_fetch_linkedin_has_docstring(self):
-        """fetch_linkedin must have a docstring for LLM guidance."""
-        assert fetch_linkedin.__doc__ is not None
-        assert len(fetch_linkedin.__doc__) > 50
+        """fetch_linkedin must have a description for LLM guidance."""
+        assert fetch_linkedin.description is not None
+        assert len(fetch_linkedin.description) > 50
 
     def test_web_search_has_docstring(self):
-        """web_search must have a docstring for LLM guidance."""
-        assert web_search.__doc__ is not None
-        assert len(web_search.__doc__) > 50
+        """web_search must have a description for LLM guidance."""
+        assert web_search.description is not None
+        assert len(web_search.description) > 50
 
     def test_analyze_company_has_docstring(self):
-        """analyze_company must have a docstring for LLM guidance."""
-        assert analyze_company.__doc__ is not None
-        assert len(analyze_company.__doc__) > 50
+        """analyze_company must have a description for LLM guidance."""
+        assert analyze_company.description is not None
+        assert len(analyze_company.description) > 50
 
     def test_docstrings_have_use_when(self):
-        """Docstrings should explain WHEN to use the tool."""
+        """Descriptions should explain WHEN to use the tool."""
         # This is crucial for LLM tool selection
-        assert "USE WHEN" in fetch_linkedin.__doc__.upper() or "WHEN" in fetch_linkedin.__doc__.upper()
-        assert "USE WHEN" in web_search.__doc__.upper() or "WHEN" in web_search.__doc__.upper()
+        assert "USE WHEN" in fetch_linkedin.description.upper() or "WHEN" in fetch_linkedin.description.upper()
+        assert "USE WHEN" in web_search.description.upper() or "WHEN" in web_search.description.upper()
 
 
 class TestToolSchemas:

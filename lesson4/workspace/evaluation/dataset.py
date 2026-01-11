@@ -169,6 +169,18 @@ SAMPLE_TEST_CASES = [
             "should_handle_gracefully": True,
         },
     },
+    {
+        "name": "adversarial_company_mismatch",
+        "inputs": {
+            "linkedin_url": "https://linkedin.com/in/demo-founder",
+            "company_name": "Wrong Company Inc",  # Deliberately wrong
+        },
+        "outputs": {
+            "should_flag_mismatch": True,
+            "expected_behavior": "Agent should notice LinkedIn shows different company",
+            "should_handle_gracefully": True,
+        },
+    },
 ]
 
 
