@@ -11,6 +11,7 @@ Key patterns to implement:
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Send
 
 from .state import ReviewState
 from .nodes import (
@@ -22,11 +23,12 @@ from .nodes import (
 )
 from .nodes.triage import route_review
 
+def dispatch_reviews(state: ReviewState):
+    # fan-out: create a triage branch for each review
+    return [Send("triage", {"current_review": r}) for r in state["reviews"]]
 
 def create_content_review_squad(checkpointer=None):
     """Create and compile the Content Review Squad graph.
-
-    TODO: Implement this function.
 
     Architecture:
     ```
@@ -66,48 +68,46 @@ def create_content_review_squad(checkpointer=None):
     Returns:
         Compiled StateGraph
     """
-    # TODO: Initialize graph
     graph = StateGraph(ReviewState)
 
-    # TODO: Add nodes
-    # graph.add_node("triage", triage_node)
-    # graph.add_node("bug_reporter", bug_reporter_node)
-    # ... etc
+    graph.add_node("dispatch", lambda s: {})
+    graph.add_node("triage", triage_node)
+    graph.add_node("bug_reporter", bug_reporter_node)
+    graph.add_node("feature_analyst", feature_analyst_node)
+    graph.add_node("praise_logger", praise_logger_node)
 
-    # TODO: Add entry edge
-    # graph.add_edge(START, "triage")
+    # summary once at the end
+    graph.add_node("summary", summary_node, defer=True)
 
-    # TODO: Add conditional edges from triage
-    # This is the key routing logic!
-    # graph.add_conditional_edges(
-    #     "triage",
-    #     route_review,  # The routing function
-    #     {
-    #         "bug_reporter": "bug_reporter",
-    #         "feature_analyst": "feature_analyst",
-    #         "praise_logger": "praise_logger",
-    #     }
-    # )
+    graph.add_edge(START, "dispatch")
 
-    # TODO: Add fan-in edges to summary
-    # graph.add_edge("bug_reporter", "summary")
-    # graph.add_edge("feature_analyst", "summary")
-    # graph.add_edge("praise_logger", "summary")
+    # FAN-OUT: dispatch -> many triage
+    graph.add_conditional_edges("dispatch", dispatch_reviews, ["triage"])
 
-    # TODO: Add exit edge
-    # graph.add_edge("summary", END)
+    # ROUTING: triage -> appropriate agent
+    graph.add_conditional_edges(
+        "triage",
+        route_review,
+        {
+            "bug_reporter": "bug_reporter",
+            "feature_analyst": "feature_analyst",
+            "praise_logger": "praise_logger",
+        },
+    )
 
-    # TODO: Compile with checkpointer
+    # FAN-IN: all branches converge in summary
+    graph.add_edge("bug_reporter", "summary")
+    graph.add_edge("feature_analyst", "summary")
+    graph.add_edge("praise_logger", "summary")
+    graph.add_edge("summary", END)
+
     if checkpointer is None:
         checkpointer = MemorySaver()
 
-    # For human-in-the-loop, use interrupt_before or interrupt_after:
-    # return graph.compile(
-    #     checkpointer=checkpointer,
-    #     interrupt_before=["feature_analyst"],  # Pause before feature analysis
-    # )
-
-    raise NotImplementedError("Implement the graph wiring!")
+    return graph.compile(
+        checkpointer=checkpointer,
+        interrupt_before=["feature_finalize"],
+    )
 
 
 # Convenience instance (students should implement create_content_review_squad first)

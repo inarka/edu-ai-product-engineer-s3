@@ -74,27 +74,71 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
     print("=" * 60)
     print(f"\nProcessing {len(reviews)} reviews...")
 
-    # TODO: Create the graph
-    # graph = create_content_review_squad()
+    graph = create_content_review_squad()
 
-    # TODO: Process reviews
-    # Option 1: Process one at a time
-    # for review in reviews:
-    #     state = {"current_review": review, ...}
-    #     result = await graph.ainvoke(state, config)
-    #
-    # Option 2: Process batch (more complex)
-    # state = {"reviews": reviews, ...}
-    # result = await graph.ainvoke(state, config)
+    config = {
+        "configurable": {
+            "thread_id": f"hw3-{uuid.uuid4()}",
+            "max_concurrency": 10,
+        }
+    }
 
-    # TODO: Handle human-in-the-loop for feature requests
-    # If using interrupt_before/after, you'll need to:
-    # 1. Check if graph is paused (state.next is not empty)
-    # 2. Show the pending feature spec
-    # 3. Get human approval
-    # 4. Resume with await graph.ainvoke(None, config)
+    state: ReviewState = {
+        "reviews": reviews,
+        "categories": {},
+        "bug_results": [],
+        "feature_results": [],
+        "praise_results": [],
+        "pending_feature_specs": {},
+        "feature_decisions": {},
+    }
 
-    raise NotImplementedError("Implement the review processing!")
+    # 1) стартуем
+    await graph.ainvoke(state, config=config)
+
+    # 2) крутимся, пока граф не завершится
+    while True:
+        snap = await graph.aget_state(config)
+        if not snap.next:
+            break
+
+        if "feature_approval" not in snap.next:
+            raise RuntimeError(f"Paused before unexpected node(s): {snap.next}")
+
+        values: ReviewState = snap.values
+        pending = values.get("pending_feature_specs") or {}
+        decisions = dict(values.get("feature_decisions") or {})
+
+        # find review_id with draft but no decision
+        target_id = next((rid for rid in sorted(pending.keys()) if rid not in decisions), None)
+        if target_id is None:
+            raise RuntimeError("Paused before feature_approval, but no pending draft without decision was found.")
+
+        draft = pending[target_id]
+        print("\n" + "-" * 60)
+        print(f"HUMAN REVIEW (review #{target_id})")
+        print(f"Feature: {draft.get('feature_name')}")
+        print(f"Complexity: {draft.get('complexity')} | Priority: {draft.get('priority')}")
+        print("-" * 60)
+        print(draft.get("markdown", ""))
+        print("-" * 60)
+
+        if interactive:
+            ans = input("Approve? (y/n): ").strip().lower()
+            approved = ans in {"y", "yes"}
+            notes = input("Notes (optional): ").strip()
+        else:
+            approved = True
+            notes = "Auto-approved (interactive=False)."
+
+        decisions[target_id] = {"approved": approved, "notes": notes}
+
+        graph.update_state(config, {"feature_decisions": decisions})
+
+        # 3) resume
+        await graph.ainvoke(None, config=config)
+
+    return (await graph.aget_state(config)).values
 
 
 def print_results(state: ReviewState):

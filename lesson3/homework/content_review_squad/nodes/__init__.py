@@ -7,6 +7,7 @@ from .triage import triage_node
 from .bug_reporter import bug_reporter_node
 from .feature_analyst import feature_analyst_node
 from .praise_logger import praise_logger_node
+from .human_review import human_review_node
 from .summary import summary_node
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "bug_reporter_node",
     "feature_analyst_node",
     "praise_logger_node",
+    "human_review_node",
     "summary_node",
 ]

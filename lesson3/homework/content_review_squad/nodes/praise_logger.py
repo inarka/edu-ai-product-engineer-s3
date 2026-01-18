@@ -9,8 +9,16 @@ TODO: Implement this node to:
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
+from pydantic import BaseModel, Field
+from typing import Literal
 
 from ..state import ReviewState
+
+class Testimonial(BaseModel):
+    quote: str = Field(description="Most impactful direct quote from the review (verbatim style)")
+    sentiment_summary: str = Field(description="1–2 sentence summary of positive sentiment")
+    value: Literal["high", "medium", "low"] = Field(description="Testimonial value")
+    suggested_uses: list[str] = Field(description="Where to use it (e.g., landing page, social, app store)")
 
 
 PRAISE_LOGGER_PROMPT = """You are a testimonial curator. Your job is to:
@@ -27,8 +35,6 @@ Keep the original voice of the user when extracting quotes.
 async def praise_logger_node(state: ReviewState) -> dict:
     """Log positive feedback as a testimonial.
 
-    TODO: Implement this function.
-
     Steps:
     1. Get the positive review from state
     2. Use LLM to extract and format testimonial (gpt-5-mini is fine)
@@ -40,19 +46,57 @@ async def praise_logger_node(state: ReviewState) -> dict:
     Returns:
         State update with testimonial result
     """
-    # TODO: Get current review
     current_review = state.get("current_review")
-
     if not current_review:
-        return {
-            "messages": [AIMessage(content="No praise to log.")]
-        }
+        return {"messages": [AIMessage(content="No praise to log.")]}
 
-    # TODO: Create LLM (gpt-5-mini is sufficient for this task)
+    review_id = current_review.get("id")
+    review_text = current_review.get("text", "")
+    rating = int(current_review.get("rating", 0))
 
-    # TODO: Extract and format testimonial
+    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+    structured_llm = llm.with_structured_output(Testimonial)
 
-    # TODO: Return state update
-    # Hint: Add to praise_results list in state
+    messages = [
+        SystemMessage(content=PRAISE_LOGGER_PROMPT),
+        HumanMessage(
+            content=(
+                "Extract a testimonial from the review.\n"
+                "- Quote should preserve the user's voice.\n"
+                "- If the review is short, the quote can be the full text.\n\n"
+                f"Review ID: {review_id}\n"
+                f"Rating: {rating}/5\n"
+                f"Text: {review_text}\n"
+            )
+        ),
+    ]
 
-    raise NotImplementedError("Implement this node!")
+    t: Testimonial = await structured_llm.ainvoke(messages)
+
+    action = f"Logged testimonial (value: {t.value.upper()})"
+
+    return {
+        # ВАЖНО: список из 1 элемента (чтобы reducer add работал в параллели)
+        "praise_results": [
+            {
+                "id": review_id,
+                "category": "praise",
+                "action_taken": action,
+                "details": {
+                    "quote": t.quote,
+                    "sentiment_summary": t.sentiment_summary,
+                    "value": t.value,
+                    "suggested_uses": t.suggested_uses,
+                    "rating": rating,
+                },
+            }
+        ],
+        "messages": [
+            AIMessage(
+                content=(
+                    f"Extracted testimonial for review #{review_id}. "
+                    f"Value={t.value.upper()}. Quote: “{t.quote}”"
+                )
+            )
+        ],
+    }
