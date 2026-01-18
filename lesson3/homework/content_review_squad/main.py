@@ -98,60 +98,58 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
     }
 
     # 1) первый прогон до первой паузы (или до конца)
-    await graph.ainvoke(state, config=config)
+    result = await graph.ainvoke(state, config=config)
 
-    # 2) human-in-the-loop цикл (обрабатываем все interrupts)
-    while True:
-        snap = await graph.aget_state(config)
+    # 2) human-in-the-loop цикл (обрабатываем все interrupts одновременно)
+    # Когда несколько feature requests обрабатываются параллельно, каждый вызывает interrupt()
+    # Нужно обработать все interrupts одновременно через interrupt ID
+    while "__interrupt__" in result and result["__interrupt__"]:
+        interrupts = result["__interrupt__"]
         
-        # Если нет следующих узлов - граф завершился
-        if not snap.next:
-            break
+        print(f"\nFound {len(interrupts)} feature request(s) pending approval...")
         
-        # Проверяем, что остановились на feature_approval
-        if "feature_approval" not in snap.next:
-            raise RuntimeError(f"Paused before unexpected node(s): {snap.next}")
+        # Собираем решения для всех interrupts
+        resume_values = {}
         
-        # Получаем текущее состояние
-        values: ReviewState = snap.values
-        pending = values.get("pending_feature_specs") or {}
-        decisions = values.get("feature_decisions") or {}
+        for idx, intr in enumerate(interrupts, 1):
+            # Получаем payload из interrupt
+            # interrupt может быть объектом с .value или dict
+            payload = getattr(intr, "value", None) or (intr if isinstance(intr, dict) else {})
+            
+            review_id = payload.get("review_id")
+            feature_name = payload.get("feature_name", "(unknown)")
+            complexity = payload.get("complexity", "(unknown)")
+            priority = payload.get("priority", "(unknown)")
+            markdown = payload.get("markdown", "")
+            
+            print("\n" + "-" * 60)
+            print(f"HUMAN REVIEW #{idx}/{len(interrupts)} (review #{review_id})")
+            print(f"Feature: {feature_name}")
+            print(f"Complexity: {complexity} | Priority: {priority}")
+            print("-" * 60)
+            print(markdown)
+            print("-" * 60)
+            
+            if interactive:
+                ans = input("Approve? (y/n): ").strip().lower()
+                approved = ans in {"y", "yes"}
+                notes = input("Notes (optional): ").strip()
+            else:
+                approved = True
+                notes = "Auto-approved (interactive=False)."
+            
+            # Сохраняем решение с interrupt ID как ключом
+            # interrupt.id - уникальный идентификатор interrupt'а
+            # Если id недоступен, используем review_id как fallback
+            interrupt_id = getattr(intr, "id", None) or review_id
+            resume_values[interrupt_id] = {"approved": approved, "notes": notes}
         
-        # Находим review_id с draft но без решения
-        target_id = next((rid for rid in sorted(pending.keys()) if rid not in decisions), None)
-        if target_id is None:
-            raise RuntimeError("Paused before feature_approval, but no pending draft without decision was found.")
-        
-        draft = pending[target_id]
-        review_id = target_id
-        feature_name = draft.get("feature_name", "(unknown)")
-        complexity = draft.get("complexity", "(unknown)")
-        priority = draft.get("priority", "(unknown)")
-        markdown = draft.get("markdown", "")
-        
-        print("\n" + "-" * 60)
-        print(f"HUMAN REVIEW (review #{review_id})")
-        print(f"Feature: {feature_name}")
-        print(f"Complexity: {complexity} | Priority: {priority}")
-        print("-" * 60)
-        print(markdown)
-        print("-" * 60)
-        
-        if interactive:
-            ans = input("Approve? (y/n): ").strip().lower()
-            approved = ans in {"y", "yes"}
-            notes = input("Notes (optional): ").strip()
-        else:
-            approved = True
-            notes = "Auto-approved (interactive=False)."
-        
-        # Resume с решением - это значение вернётся из interrupt() внутри feature_approval_node
-        decision_payload = {"approved": approved, "notes": notes}
-        await graph.ainvoke(Command(resume=decision_payload), config=config)
-    
-    # 3) готово — возвращаем финальный state из чекпойнтера
-    final_state = (await graph.aget_state(config)).values
-    return final_state
+        # Резюмим все interrupts сразу через Command(resume={interrupt_id: decision})
+        # Формат: {interrupt_id: {"approved": bool, "notes": str}}
+        result = await graph.ainvoke(Command(resume=resume_values), config=config)
+
+    # 3) готово — result уже содержит финальный state
+    return result
 
 
 def print_results(state: ReviewState):
