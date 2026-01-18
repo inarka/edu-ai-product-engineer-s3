@@ -15,17 +15,50 @@ from langgraph.types import Send
 
 from .state import ReviewState
 from .nodes import (
-    triage_node,
+    triage_all_node,
     bug_reporter_node,
     feature_analyst_node,
+    feature_approval_node,
+    feature_finalize_node,
+    feature_reject_node,
     praise_logger_node,
     summary_node,
 )
-from .nodes.triage import route_review
 
 def dispatch_reviews(state: ReviewState):
-    # fan-out: create a triage branch for each review
-    return [Send("triage", {"current_review": r}) for r in state["reviews"]]
+    """Dispatch reviews to appropriate handlers based on categories.
+
+    Reads categories from global state (set by triage_all_node) and creates
+    Send for each review to route it to the correct handler.
+
+    Args:
+        state: Current review state with categories and reviews
+
+    Returns:
+        List of Send objects routing each review to appropriate handler
+    """
+    categories = state.get("categories", {})
+    reviews = state.get("reviews", [])
+    
+    sends = []
+    for r in reviews:
+        review_id = r.get("id")
+        category = categories.get(review_id, "bug")  # default to bug if not classified
+        
+        # Map category to target node
+        node = {
+            "bug": "bug_reporter",
+            "feature": "feature_analyst",
+            "praise": "praise_logger",
+        }.get(category, "bug_reporter")
+        
+        # Send передаёт изолированное состояние следующему узлу
+        sends.append(Send(node, {
+            "current_review": r,
+            "category": category,
+        }))
+    
+    return sends
 
 def create_content_review_squad(checkpointer=None):
     """Create and compile the Content Review Squad graph.
@@ -70,34 +103,37 @@ def create_content_review_squad(checkpointer=None):
     """
     graph = StateGraph(ReviewState)
 
-    graph.add_node("dispatch", lambda s: {})
-    graph.add_node("triage", triage_node)
+    # === NODES ===
+    graph.add_node("triage_all", triage_all_node)
     graph.add_node("bug_reporter", bug_reporter_node)
     graph.add_node("feature_analyst", feature_analyst_node)
+    graph.add_node("feature_approval", feature_approval_node)
+    graph.add_node("feature_finalize", feature_finalize_node)
+    graph.add_node("feature_reject", feature_reject_node)
     graph.add_node("praise_logger", praise_logger_node)
 
     # summary once at the end
     graph.add_node("summary", summary_node, defer=True)
 
-    graph.add_edge(START, "dispatch")
-
-    # FAN-OUT: dispatch -> many triage
-    graph.add_conditional_edges("dispatch", dispatch_reviews, ["triage"])
-
-    # ROUTING: triage -> appropriate agent
+    # === EDGES ===
+    # Классификация до fan-out: START -> triage_all -> dispatch -> Send(...)
+    graph.add_edge(START, "triage_all")
+    
+    # FAN-OUT: dispatch читает categories из глобального state и создаёт Send для каждого ревью
     graph.add_conditional_edges(
-        "triage",
-        route_review,
-        {
-            "bug_reporter": "bug_reporter",
-            "feature_analyst": "feature_analyst",
-            "praise_logger": "praise_logger",
-        },
+        "triage_all",
+        dispatch_reviews,
+        ["bug_reporter", "feature_analyst", "praise_logger"]
     )
+    
+    # FEATURE FLOW: analyst -> approval (HIL) -> finalize/reject
+    graph.add_edge("feature_analyst", "feature_approval")
+    # feature_approval uses Command(goto=...) to route to finalize or reject
 
     # FAN-IN: all branches converge in summary
     graph.add_edge("bug_reporter", "summary")
-    graph.add_edge("feature_analyst", "summary")
+    graph.add_edge("feature_finalize", "summary")
+    graph.add_edge("feature_reject", "summary")
     graph.add_edge("praise_logger", "summary")
     graph.add_edge("summary", END)
 
@@ -106,7 +142,6 @@ def create_content_review_squad(checkpointer=None):
 
     return graph.compile(
         checkpointer=checkpointer,
-        interrupt_before=["feature_finalize"],
     )
 
 

@@ -42,7 +42,6 @@ class FeatureDecision(TypedDict, total=False):
 class ReviewState(TypedDict, total=False):
     # === INPUT ===
     reviews: list[Review]
-    current_review: Review | None
 
     # === TRIAGE ===
     categories: Annotated[dict[int, Category], operator.or_]
@@ -50,8 +49,9 @@ class ReviewState(TypedDict, total=False):
     # === AGENT RESULTS ===
     bug_results: Annotated[list[ReviewResult], operator.add]
     praise_results: Annotated[list[ReviewResult], operator.add]
+    feature_results: Annotated[list[ReviewResult], operator.add]
     pending_feature_specs: Annotated[dict[int, FeatureDraft], operator.or_]
-    feature_decisions: dict[int, FeatureDecision]
+    feature_decisions: Annotated[dict[int, FeatureDecision], operator.or_]
 
     # === SYNTHESIS ===
     summary_report: str

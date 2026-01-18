@@ -10,7 +10,10 @@ With human-in-the-loop demo:
 import asyncio
 import argparse
 import os
+import uuid
+
 from dotenv import load_dotenv
+from langgraph.types import Command
 
 # Load environment variables
 load_dotenv()
@@ -83,6 +86,7 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
         }
     }
 
+    # Важно инициализировать агрегаты, если у тебя reducers
     state: ReviewState = {
         "reviews": reviews,
         "categories": {},
@@ -90,39 +94,49 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
         "feature_results": [],
         "praise_results": [],
         "pending_feature_specs": {},
-        "feature_decisions": {},
+        "feature_decisions": {},  # можно оставить, даже если approval_node сам пишет решения
     }
 
-    # 1) стартуем
+    # 1) первый прогон до первой паузы (или до конца)
     await graph.ainvoke(state, config=config)
 
-    # 2) крутимся, пока граф не завершится
+    # 2) human-in-the-loop цикл (обрабатываем все interrupts)
     while True:
         snap = await graph.aget_state(config)
+        
+        # Если нет следующих узлов - граф завершился
         if not snap.next:
             break
-
+        
+        # Проверяем, что остановились на feature_approval
         if "feature_approval" not in snap.next:
             raise RuntimeError(f"Paused before unexpected node(s): {snap.next}")
-
+        
+        # Получаем текущее состояние
         values: ReviewState = snap.values
         pending = values.get("pending_feature_specs") or {}
-        decisions = dict(values.get("feature_decisions") or {})
-
-        # find review_id with draft but no decision
+        decisions = values.get("feature_decisions") or {}
+        
+        # Находим review_id с draft но без решения
         target_id = next((rid for rid in sorted(pending.keys()) if rid not in decisions), None)
         if target_id is None:
             raise RuntimeError("Paused before feature_approval, but no pending draft without decision was found.")
-
+        
         draft = pending[target_id]
+        review_id = target_id
+        feature_name = draft.get("feature_name", "(unknown)")
+        complexity = draft.get("complexity", "(unknown)")
+        priority = draft.get("priority", "(unknown)")
+        markdown = draft.get("markdown", "")
+        
         print("\n" + "-" * 60)
-        print(f"HUMAN REVIEW (review #{target_id})")
-        print(f"Feature: {draft.get('feature_name')}")
-        print(f"Complexity: {draft.get('complexity')} | Priority: {draft.get('priority')}")
+        print(f"HUMAN REVIEW (review #{review_id})")
+        print(f"Feature: {feature_name}")
+        print(f"Complexity: {complexity} | Priority: {priority}")
         print("-" * 60)
-        print(draft.get("markdown", ""))
+        print(markdown)
         print("-" * 60)
-
+        
         if interactive:
             ans = input("Approve? (y/n): ").strip().lower()
             approved = ans in {"y", "yes"}
@@ -130,15 +144,14 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
         else:
             approved = True
             notes = "Auto-approved (interactive=False)."
-
-        decisions[target_id] = {"approved": approved, "notes": notes}
-
-        graph.update_state(config, {"feature_decisions": decisions})
-
-        # 3) resume
-        await graph.ainvoke(None, config=config)
-
-    return (await graph.aget_state(config)).values
+        
+        # Resume с решением - это значение вернётся из interrupt() внутри feature_approval_node
+        decision_payload = {"approved": approved, "notes": notes}
+        await graph.ainvoke(Command(resume=decision_payload), config=config)
+    
+    # 3) готово — возвращаем финальный state из чекпойнтера
+    final_state = (await graph.aget_state(config)).values
+    return final_state
 
 
 def print_results(state: ReviewState):
@@ -147,7 +160,7 @@ def print_results(state: ReviewState):
     print("PROCESSING RESULTS")
     print("=" * 60)
 
-    # TODO: Print results from state
+    # Print results from state
     # - Bug reports created
     # - Feature specs (approved/pending)
     # - Testimonials logged
@@ -177,7 +190,7 @@ def main():
 
     # LangSmith trace info
     if os.getenv("LANGCHAIN_API_KEY"):
-        print(f"\nView trace: https://smith.langchain.com")
+        print("\nView trace: https://smith.langchain.com")
         print(f"Project: {os.getenv('LANGCHAIN_PROJECT', 'content-review-squad')}")
 
 

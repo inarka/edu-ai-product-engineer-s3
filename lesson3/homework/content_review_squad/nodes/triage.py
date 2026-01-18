@@ -1,13 +1,10 @@
-"""Triage Node - Classifies reviews and routes to appropriate handler.
+"""Triage Node - Classifies all reviews before fan-out.
 
-TODO: Implement this node to:
-1. Take a review from state
-2. Use an LLM to classify it as: bug, feature, or praise
-3. Return the classification in state
-
-This node should use conditional edges to route to different branches.
+This node classifies all reviews in parallel before dispatch.
+Categories are stored in global state, then dispatch uses them for routing.
 """
 
+import asyncio
 from typing import Literal
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -43,64 +40,61 @@ class ReviewClassification(BaseModel):
     )
 
 
-async def triage_node(state: ReviewState) -> dict:
-    """Classify the current review and prepare for routing.
+async def triage_all_node(state: ReviewState) -> dict:
+    """Классифицирует все ревью параллельно, до fan-out.
+
+    Классификация происходит до dispatch, чтобы categories были доступны
+    в глобальном состоянии для правильной маршрутизации.
 
     Steps:
-    1. Get the current review from state
-    2. Use an LLM to classify it (use gpt-5-mini for cost efficiency)
-    3. Parse the classification
-    4. Return state update with the classification
-
-    The graph's conditional edges will use this classification to route
-    to the appropriate handler (bug_reporter, feature_analyst, or praise_logger).
+    1. Получить все ревью из state
+    2. Параллельно классифицировать каждое ревью с помощью LLM
+    3. Вернуть categories в глобальном состоянии
 
     Args:
-        state: Current review state
+        state: Current review state with reviews list
 
     Returns:
-        State update with classification result
+        State update with categories dict: {review_id: category}
     """
-    # Get current review from state
-    current_review = state.get("current_review")
-    if not current_review:
-        return {"messages": [AIMessage(content="No review to classify.")]}
+    reviews = state.get("reviews", [])
+    
+    if not reviews:
+        return {
+            "categories": {},
+            "messages": [AIMessage(content="No reviews to classify.")]
+        }
 
     llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
     structured_llm = llm.with_structured_output(ReviewClassification)
-
-    review_text = current_review.get("text", "")
-    review_rating = current_review.get("rating", 0)
-
+    
+    # Параллельная классификация всех ревью
+    async def classify(review: dict) -> tuple[int, ReviewClassification]:
+        """Классифицирует одно ревью."""
+        messages = [
+            SystemMessage(content=TRIAGE_SYSTEM_PROMPT),
+            HumanMessage(content=f"Review text: {review['text']}\nRating: {review['rating']}/5"),
+        ]
+        classification = await structured_llm.ainvoke(messages)
+        return review["id"], classification
+    
+    # Параллельно классифицируем все ревью
+    results = await asyncio.gather(*[classify(r) for r in reviews])
+    
+    # Собираем categories и messages
+    categories = {rid: cls.category for rid, cls in results}
     messages = [
-        SystemMessage(content=TRIAGE_SYSTEM_PROMPT),
-        HumanMessage(content=f"Review text: {review_text}\nRating: {review_rating}/5"),
-    ]
-
-    classification = await structured_llm.ainvoke(messages)
-    category = classification.category
-    rid = current_review.get("id")
-
-    return {
-        # IMPORTANT: list to avoid update conflicts when parallel
-        "categories": {rid: category},
-        "messages": [
-            AIMessage(
-                content=(
-                    f"Classified review #{current_review.get('id')} as: {category.upper()} "
-                    f"(confidence: {classification.confidence:.2f}). "
-                    f"Reasoning: {classification.reasoning}"
-                )
+        AIMessage(
+            content=(
+                f"Classified review #{rid} as: {cls.category.upper()} "
+                f"(confidence: {cls.confidence:.2f}). "
+                f"Reasoning: {cls.reasoning}"
             )
-        ],
-    }
-
-def route_review(state: ReviewState) -> str:
-    rid = state.get("current_review", {}).get("id")
-    category = (state.get("categories") or {}).get(rid, "bug")
-
+        )
+        for rid, cls in results
+    ]
+    
     return {
-        "bug": "bug_reporter",
-        "feature": "feature_analyst",
-        "praise": "praise_logger",
-    }[category]
+        "categories": categories,
+        "messages": messages,
+    }

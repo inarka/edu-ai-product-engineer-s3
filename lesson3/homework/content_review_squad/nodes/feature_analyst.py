@@ -1,21 +1,21 @@
 """Feature Analyst Node - Analyzes feature requests and writes specs.
 
-TODO: Implement this node to:
-1. Take a feature request review from state
-2. Analyze the feature request
-3. Generate a feature specification
-4. This node should have HUMAN-IN-THE-LOOP before finalizing
+Architecture:
+    feature_analyst (draft) -> feature_approval (HIL) -> feature_finalize | feature_reject
 
-IMPORTANT: This is where you implement the human-in-the-loop requirement!
+This implements proper human-in-the-loop using:
+- interrupt() for pausing execution
+- Command(goto=...) for routing after resume
 """
 
 import re
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
-from langgraph.prebuilt import interrupt
-from pydantic import BaseModel, Field
 from typing import Literal
 from pathlib import Path
+
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
+from langgraph.types import Command, interrupt
+from pydantic import BaseModel, Field
 
 from ..state import ReviewState
 
@@ -65,7 +65,7 @@ def _spec_to_markdown(spec: FeatureSpec, review_id: int, review_text: str, ratin
 
 
 async def feature_analyst_node(state: ReviewState) -> dict:
-    """Analyze a feature request and prepare a specification.
+    """Analyze a feature request and prepare a specification (DRAFT only).
 
     TODO: Implement this function.
 
@@ -116,7 +116,6 @@ async def feature_analyst_node(state: ReviewState) -> dict:
     spec: FeatureSpec = await structured_llm.ainvoke(msgs)
     markdown = _spec_to_markdown(spec, review_id=review_id, review_text=review_text, rating=rating)
 
-    # draft кладём в pending_feature_specs[review_id]
     draft = {
         "feature_name": spec.feature_name,
         "complexity": spec.complexity,
@@ -131,36 +130,139 @@ async def feature_analyst_node(state: ReviewState) -> dict:
         ],
     }
     
+# === HUMAN-IN-THE-LOOP: APPROVAL NODE ===
+
+Next = Literal["feature_finalize", "feature_reject"]
+
+
+async def feature_approval_node(state: ReviewState) -> Command[Next]:
+    """PROPER HIL: Interrupt execution and wait for human decision.
+
+    Uses interrupt() to pause and Command(goto=...) to route after resume.
+
+    Args:
+        state: Current review state with pending feature spec
+
+    Returns:
+        Command routing to feature_finalize or feature_reject
+    """
+    current_review = state.get("current_review")
+    if not current_review:
+        return Command(
+            goto="feature_reject",
+            update={"messages": [AIMessage(content="No current_review for feature approval.")]}
+        )
+
+    review_id = int(current_review["id"])
+
+    drafts = state.get("pending_feature_specs") or {}
+    draft = drafts.get(review_id)
+    if not draft:
+        return Command(
+            goto="feature_reject",
+            update={"messages": [AIMessage(content=f"No draft spec found for review #{review_id}.")]}
+        )
+
+    # 1) PAUSE: this will surface in result["__interrupt__"]
+    decision = interrupt({
+        "type": "feature_approval",
+        "question": "Approve this feature?",
+        "review_id": review_id,
+        "feature_name": draft.get("feature_name"),
+        "complexity": draft.get("complexity"),
+        "priority": draft.get("priority"),
+        "markdown": draft.get("markdown"),
+    })
+
+    # 2) AFTER RESUME: decision is what you pass in Command(resume=...)
+    # Support both bool and dict formats
+    approved: bool
+    notes: str = ""
+
+    if isinstance(decision, bool):
+        approved = decision
+    elif isinstance(decision, dict):
+        approved = bool(decision.get("approved", False))
+        notes = str(decision.get("notes", "")).strip()
+    else:
+        approved = False
+
+    # Update state with the decision
+    update = {
+        "feature_decisions": {review_id: {"approved": approved, "notes": notes}},
+        "messages": [
+            AIMessage(content=f"Human decision for review #{review_id}: {'APPROVED' if approved else 'REJECTED'}")
+        ],
+    }
+
+    return Command(
+        goto="feature_finalize" if approved else "feature_reject",
+        update=update,
+    )
+
+
+# === FINALIZATION NODES ===
+
 def _slugify(text: str) -> str:
+    """Slugify text for filename."""
     text = (text or "").strip().lower()
     text = re.sub(r"[^a-z0-9]+", "_", text)
     text = re.sub(r"_+", "_", text).strip("_")
     return text or "feature"
 
 
-async def feature_approval_node(state: ReviewState) -> dict:
-    """Handle human approval/rejection of feature specs.
-
-    TODO (OPTIONAL): Implement a separate approval node.
-
-    This is an alternative approach to using interrupt_before/after.
-    You can have a dedicated node that checks approval status.
+async def feature_reject_node(state: ReviewState) -> dict:
+    """Handle rejected feature requests.
 
     Args:
-        state: Current review state with pending feature spec
+        state: Current review state
 
     Returns:
-        State update with approved/rejected status
+        State update with rejection result
     """
-    # This is optional - you can use interrupt_before/after instead
-    current_review = state.get("current_review")
-    if not current_review:
+    r = state.get("current_review")
+    if not r:
+        return {"messages": [AIMessage(content="No feature request to reject.")]}
+
+    review_id = int(r["id"])
+    draft = (state.get("pending_feature_specs") or {}).get(review_id, {})
+    decision = (state.get("feature_decisions") or {}).get(review_id, {})
+
+    return {
+        "feature_results": [{
+            "id": review_id,
+            "category": "feature",
+            "action_taken": "REJECTED by human reviewer",
+            "details": {
+                "approved": False,
+                "feature_name": draft.get("feature_name"),
+                "complexity": draft.get("complexity"),
+                "priority": draft.get("priority"),
+                "draft_markdown": draft.get("markdown"),
+                "notes": decision.get("notes", ""),
+            },
+        }],
+        "messages": [AIMessage(content=f"Feature for review #{review_id} rejected.")],
+    }
+
+
+async def feature_finalize_node(state: ReviewState) -> dict:
+    """Finalize approved feature requests (write to file).
+
+    Args:
+        state: Current review state
+
+    Returns:
+        State update with finalization result
+    """
+    r = state.get("current_review")
+    if not r:
         return {"messages": [AIMessage(content="No feature request to finalize.")]}
 
-    review_id = int(current_review.get("id"))
+    review_id = int(r["id"])
+    draft = (state.get("pending_feature_specs") or {}).get(review_id)
+    decision = (state.get("feature_decisions") or {}).get(review_id, {})
 
-    drafts = state.get("pending_feature_specs") or {}
-    draft = drafts.get(review_id)
     if not draft:
         return {
             "feature_results": [{
@@ -172,35 +274,10 @@ async def feature_approval_node(state: ReviewState) -> dict:
             "messages": [AIMessage(content=f"No draft spec found for review #{review_id}.")],
         }
 
-    decisions = state.get("feature_decisions") or {}
-    decision = decisions.get(review_id) or {}
-    approved = bool(decision.get("approved", False))
-    notes = (decision.get("notes") or "").strip()
-
-    feature_name = draft.get("feature_name", f"Feature from review {review_id}")
-    complexity = draft.get("complexity", "medium")
-    priority = draft.get("priority", "medium")
+    # Write spec to file (finalization action)
+    feature_name = draft.get("feature_name", f"feature_{review_id}")
     markdown = draft.get("markdown", "")
 
-    if not approved:
-        return {
-            "feature_results": [{
-                "id": review_id,
-                "category": "feature",
-                "action_taken": "REJECTED by human reviewer",
-                "details": {
-                    "feature_name": feature_name,
-                    "complexity": complexity,
-                    "priority": priority,
-                    "draft_markdown": markdown,
-                    "notes": notes,
-                    "approved": False,
-                },
-            }],
-            "messages": [AIMessage(content=f"Feature spec for review #{review_id} REJECTED. {notes}".strip())],
-        }
-
-    # (опционально) запись файла — это как раз “finalize”
     out_dir = Path("features")
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{_slugify(feature_name)}.md"
@@ -212,13 +289,13 @@ async def feature_approval_node(state: ReviewState) -> dict:
             "category": "feature",
             "action_taken": f"APPROVED → spec written to {out_path.as_posix()}",
             "details": {
-                "feature_name": feature_name,
-                "complexity": complexity,
-                "priority": priority,
-                "spec_path": out_path.as_posix(),
-                "notes": notes,
                 "approved": True,
+                "feature_name": feature_name,
+                "complexity": draft.get("complexity"),
+                "priority": draft.get("priority"),
+                "spec_path": out_path.as_posix(),
+                "notes": decision.get("notes", ""),
             },
         }],
-        "messages": [AIMessage(content=f"Feature spec for review #{review_id} APPROVED. Wrote {out_path.as_posix()}.")],
+        "messages": [AIMessage(content=f"Feature for review #{review_id} approved. Wrote {out_path.as_posix()}.")],
     }

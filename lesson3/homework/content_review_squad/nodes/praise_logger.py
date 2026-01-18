@@ -76,7 +76,6 @@ async def praise_logger_node(state: ReviewState) -> dict:
     action = f"Logged testimonial (value: {t.value.upper()})"
 
     return {
-        # ВАЖНО: список из 1 элемента (чтобы reducer add работал в параллели)
         "praise_results": [
             {
                 "id": review_id,

@@ -46,16 +46,71 @@ async def summary_node(state: ReviewState) -> dict:
     Returns:
         State update with summary report
     """
-    # TODO: Collect results from all branches
+    # Collect results from all branches
     bug_results = state.get("bug_results", [])
     feature_results = state.get("feature_results", [])
     praise_results = state.get("praise_results", [])
 
-    # TODO: Calculate statistics
-    # total_reviews, bugs_count, features_count, praise_count
+    # Calculate statistics
+    total_reviews = len(state.get("reviews", []))
+    bugs_count = len(bug_results)
+    features_count = len(feature_results)
+    feature_approved_count = len([
+        r for r in feature_results 
+        if r.get("details", {}).get("approved", False)
+    ])
+    feature_rejected_count = features_count - feature_approved_count
+    praise_count = len(praise_results)
 
-    # TODO: Use LLM to generate summary (gpt-5-mini is fine)
+    # Build detailed content for LLM
+    content_parts = [
+        f"Total reviews processed: {total_reviews}",
+        f"\nBugs: {bugs_count}",
+        f"\nFeatures: {features_count} (Approved: {feature_approved_count}, Rejected: {feature_rejected_count})",
+        f"\nPraise: {praise_count}",
+    ]
 
-    # TODO: Return state update with summary_report
+    # Add details for each category
+    if bug_results:
+        content_parts.append("\n\nBug Reports:")
+        for result in bug_results:
+            action = result.get("action_taken", "Unknown")
+            details = result.get("details", {})
+            content_parts.append(f"- Review #{result.get('id')}: {action}")
+            if details:
+                content_parts.append(f"  Details: {details}")
 
-    raise NotImplementedError("Implement this node!")
+    if feature_results:
+        content_parts.append("\n\nFeature Requests:")
+        for result in feature_results:
+            action = result.get("action_taken", "Unknown")
+            details = result.get("details", {})
+            feature_name = details.get("feature_name", "Unknown")
+            approved = details.get("approved", False)
+            status = "APPROVED" if approved else "REJECTED"
+            content_parts.append(f"- Review #{result.get('id')}: {feature_name} - {status}")
+            content_parts.append(f"  Action: {action}")
+            if details.get("notes"):
+                content_parts.append(f"  Notes: {details['notes']}")
+            if details.get("spec_path"):
+                content_parts.append(f"  Spec written to: {details['spec_path']}")
+
+    if praise_results:
+        content_parts.append("\n\nPraise:")
+        for result in praise_results:
+            action = result.get("action_taken", "Unknown")
+            content_parts.append(f"- Review #{result.get('id')}: {action}")
+
+    # Use LLM to generate summary (gpt-5-mini is fine)
+    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+    summary_response = await llm.ainvoke([
+        SystemMessage(content=SUMMARY_PROMPT),
+        HumanMessage(content="\n".join(content_parts))
+    ])
+
+    summary_text = summary_response.content if hasattr(summary_response, 'content') else str(summary_response)
+
+    return {
+        "summary_report": summary_text,
+        "messages": [AIMessage(content=f"Summary generated: {summary_text[:100]}...")],
+    }
