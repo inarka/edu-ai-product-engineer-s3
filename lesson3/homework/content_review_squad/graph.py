@@ -52,7 +52,7 @@ def dispatch_reviews(state: ReviewState):
             "praise": "praise_logger",
         }.get(category, "bug_reporter")
 
-        # Send передаёт изолированное состояние следующему узлу
+        # Send passes isolated state to the next node
         sends.append(Send(node, {
             "current_review": r,
             "category": category,

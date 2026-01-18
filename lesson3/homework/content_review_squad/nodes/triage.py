@@ -41,15 +41,15 @@ class ReviewClassification(BaseModel):
 
 
 async def triage_all_node(state: ReviewState) -> dict:
-    """Классифицирует все ревью параллельно, до fan-out.
+    """Classify all reviews in parallel before fan-out.
 
-    Классификация происходит до dispatch, чтобы categories были доступны
-    в глобальном состоянии для правильной маршрутизации.
+    Classification happens before dispatch so categories are available
+    in global state for proper routing.
 
     Steps:
-    1. Получить все ревью из state
-    2. Параллельно классифицировать каждое ревью с помощью LLM
-    3. Вернуть categories в глобальном состоянии
+    1. Get all reviews from state
+    2. Classify each review in parallel using LLM
+    3. Return categories in global state
 
     Args:
         state: Current review state with reviews list
@@ -68,9 +68,9 @@ async def triage_all_node(state: ReviewState) -> dict:
     llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
     structured_llm = llm.with_structured_output(ReviewClassification)
     
-    # Параллельная классификация всех ревью
+    # Parallel classification of all reviews
     async def classify(review: dict) -> tuple[int, ReviewClassification]:
-        """Классифицирует одно ревью."""
+        """Classify a single review."""
         messages = [
             SystemMessage(content=TRIAGE_SYSTEM_PROMPT),
             HumanMessage(content=f"Review text: {review['text']}\nRating: {review['rating']}/5"),
@@ -78,10 +78,10 @@ async def triage_all_node(state: ReviewState) -> dict:
         classification = await structured_llm.ainvoke(messages)
         return review["id"], classification
     
-    # Параллельно классифицируем все ревью
+    # Classify all reviews in parallel
     results = await asyncio.gather(*[classify(r) for r in reviews])
     
-    # Собираем categories и messages
+    # Collect categories and messages
     categories = {rid: cls.category for rid, cls in results}
     messages = [
         AIMessage(

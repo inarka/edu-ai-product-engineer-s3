@@ -1,10 +1,12 @@
 """Main runner for the Content Review Squad homework.
 
 Usage:
-    python main.py
-
-With human-in-the-loop demo:
-    python main.py --interactive
+    python main.py                          # Run with sample reviews
+    python main.py --interactive             # Enable human-in-the-loop
+    python main.py --visualize ascii         # Show graph in ASCII format
+    python main.py --visualize mermaid       # Show Mermaid diagram
+    python main.py --visualize png           # Generate PNG (requires grandalf)
+    python main.py --visualize png --save-graph graph.png  # Save PNG to file
 """
 
 import asyncio
@@ -86,7 +88,7 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
         }
     }
 
-    # Важно инициализировать агрегаты, если у тебя reducers
+    # Important: initialize aggregates if using reducers
     state: ReviewState = {
         "reviews": reviews,
         "categories": {},
@@ -94,26 +96,26 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
         "feature_results": [],
         "praise_results": [],
         "pending_feature_specs": {},
-        "feature_decisions": {},  # можно оставить, даже если approval_node сам пишет решения
+        "feature_decisions": {},  # Can be kept even if approval_node writes decisions itself
     }
 
-    # 1) первый прогон до первой паузы (или до конца)
+    # Step 1: Initial run until first pause (or completion)
     result = await graph.ainvoke(state, config=config)
 
-    # 2) human-in-the-loop цикл (обрабатываем все interrupts одновременно)
-    # Когда несколько feature requests обрабатываются параллельно, каждый вызывает interrupt()
-    # Нужно обработать все interrupts одновременно через interrupt ID
+    # Step 2: Human-in-the-loop cycle (process all interrupts simultaneously)
+    # When multiple feature requests are processed in parallel, each calls interrupt()
+    # Need to handle all interrupts simultaneously via interrupt ID
     while "__interrupt__" in result and result["__interrupt__"]:
         interrupts = result["__interrupt__"]
         
         print(f"\nFound {len(interrupts)} feature request(s) pending approval...")
         
-        # Собираем решения для всех interrupts
+        # Collect decisions for all interrupts
         resume_values = {}
         
         for idx, intr in enumerate(interrupts, 1):
-            # Получаем payload из interrupt
-            # interrupt может быть объектом с .value или dict
+            # Get payload from interrupt
+            # interrupt can be an object with .value or a dict
             payload = getattr(intr, "value", None) or (intr if isinstance(intr, dict) else {})
             
             review_id = payload.get("review_id")
@@ -138,18 +140,57 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
                 approved = True
                 notes = "Auto-approved (interactive=False)."
             
-            # Сохраняем решение с interrupt ID как ключом
-            # interrupt.id - уникальный идентификатор interrupt'а
-            # Если id недоступен, используем review_id как fallback
+            # Save decision with interrupt ID as key
+            # interrupt.id is the unique identifier for the interrupt
+            # If id is unavailable, use review_id as fallback
             interrupt_id = getattr(intr, "id", None) or review_id
             resume_values[interrupt_id] = {"approved": approved, "notes": notes}
         
-        # Резюмим все interrupts сразу через Command(resume={interrupt_id: decision})
-        # Формат: {interrupt_id: {"approved": bool, "notes": str}}
+        # Resume all interrupts at once via Command(resume={interrupt_id: decision})
+        # Format: {interrupt_id: {"approved": bool, "notes": str}}
         result = await graph.ainvoke(Command(resume=resume_values), config=config)
 
-    # 3) готово — result уже содержит финальный state
+    # Step 3: Done - result already contains final state
     return result
+
+
+def visualize_graph(output_format: str = "ascii", output_file: str | None = None):
+    """Visualize the Content Review Squad graph.
+    
+    Args:
+        output_format: Output format - "ascii", "mermaid", or "png"
+        output_file: Optional file path to save output (for PNG or Mermaid)
+    """
+    graph = create_content_review_squad()
+    graph_obj = graph.get_graph()
+    
+    if output_format == "ascii":
+        print("\n" + "=" * 60)
+        print("GRAPH VISUALIZATION (ASCII)")
+        print("=" * 60)
+        print(graph_obj.draw_ascii())
+    elif output_format == "mermaid":
+        mermaid_text = graph_obj.draw_mermaid()
+        if output_file:
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(mermaid_text)
+            print(f"\nMermaid diagram saved to {output_file}")
+        else:
+            print("\n" + "=" * 60)
+            print("GRAPH VISUALIZATION (Mermaid)")
+            print("=" * 60)
+            print(mermaid_text)
+    elif output_format == "png":
+        try:
+            png_data = graph_obj.draw_mermaid_png()
+            output_path = output_file or "content_review_squad_graph.png"
+            with open(output_path, "wb") as f:
+                f.write(png_data)
+            print(f"\nGraph PNG saved to {output_path}")
+        except Exception as e:
+            print(f"\nERROR: Failed to generate PNG: {e}")
+            print("Install dependencies: pip install grandalf")
+            print("Or use ASCII format: python main.py --visualize ascii")
 
 
 def print_results(state: ReviewState):
@@ -175,7 +216,23 @@ def main():
         action="store_true",
         help="Enable human-in-the-loop for feature requests"
     )
+    parser.add_argument(
+        "--visualize",
+        type=str,
+        choices=["ascii", "mermaid", "png"],
+        help="Visualize the graph (ascii, mermaid, or png)"
+    )
+    parser.add_argument(
+        "--save-graph",
+        type=str,
+        help="Save graph visualization to file (for PNG or Mermaid format)"
+    )
     args = parser.parse_args()
+
+    # If visualize flag is set, show graph and exit
+    if args.visualize:
+        visualize_graph(args.visualize, args.save_graph)
+        return
 
     # Check API key
     if not os.getenv("OPENAI_API_KEY"):
