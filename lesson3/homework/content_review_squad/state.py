@@ -10,6 +10,8 @@ Hints:
 
 from typing import TypedDict, Literal, Annotated
 from langgraph.graph import add_messages
+import operator
+Category = Literal["bug", "feature", "praise"]
 
 
 class Review(TypedDict):
@@ -22,45 +24,37 @@ class Review(TypedDict):
 class ReviewResult(TypedDict, total=False):
     """Result of processing a single review."""
     id: int
-    category: Literal["bug", "feature", "praise"]
+    category: Category
     action_taken: str
     details: dict
 
+class FeatureDraft(TypedDict, total=False):
+    feature_name: str
+    complexity: Literal["low", "medium", "high"]
+    priority: Literal["low", "medium", "high"]
+    markdown: str
+
+class FeatureDecision(TypedDict, total=False):
+    approved: bool
+    notes: str
+
 
 class ReviewState(TypedDict, total=False):
-    """The shared state for the Content Review Squad.
-
-    TODO: Add more fields as needed for your implementation.
-
-    Consider organizing into sections:
-    - INPUT: Reviews to process
-    - TRIAGE: Classification results
-    - AGENT RESULTS: What each specialist produces
-    - HUMAN REVIEW: Approval status
-    - SYNTHESIS: Final summary
-    - MESSAGES: Conversation history
-    """
-
     # === INPUT ===
     reviews: list[Review]
-    current_review: Review | None  # The review currently being processed
 
     # === TRIAGE ===
-    # TODO: Add fields for classification results
-    # Hint: What category is the current review?
+    categories: Annotated[dict[int, Category], operator.or_]
 
     # === AGENT RESULTS ===
-    # TODO: Add fields for each agent's output
-    # Hint: bug_results, feature_results, praise_results
-
-    # === HUMAN REVIEW ===
-    # TODO: Add fields for human-in-the-loop
-    # Hint: pending_approval, approved, rejected
+    bug_results: Annotated[list[ReviewResult], operator.add]
+    praise_results: Annotated[list[ReviewResult], operator.add]
+    feature_results: Annotated[list[ReviewResult], operator.add]
+    pending_feature_specs: Annotated[dict[int, FeatureDraft], operator.or_]
+    feature_decisions: Annotated[dict[int, FeatureDecision], operator.or_]
 
     # === SYNTHESIS ===
-    # TODO: Add fields for the final summary
-    # Hint: summary_report, statistics
+    summary_report: str
 
     # === MESSAGES ===
-    # Use add_messages reducer for conversation history
     messages: Annotated[list, add_messages]

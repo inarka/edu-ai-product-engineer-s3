@@ -1,13 +1,12 @@
-"""Triage Node - Classifies reviews and routes to appropriate handler.
+"""Triage Node - Classifies all reviews before fan-out.
 
-TODO: Implement this node to:
-1. Take a review from state
-2. Use an LLM to classify it as: bug, feature, or praise
-3. Return the classification in state
-
-This node should use conditional edges to route to different branches.
+This node classifies all reviews in parallel before dispatch.
+Categories are stored in global state, then dispatch uses them for routing.
 """
 
+import asyncio
+from typing import Literal
+from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
 
@@ -17,71 +16,85 @@ from ..state import ReviewState
 TRIAGE_SYSTEM_PROMPT = """You are a review triage specialist. Your job is to classify
 product reviews into one of three categories:
 
-1. BUG - The review describes a bug, error, crash, or something not working correctly
-2. FEATURE - The review requests a new feature or improvement
-3. PRAISE - The review is positive feedback, testimonial, or general appreciation
+1. bug - The review describes a bug, error, crash, or something not working correctly
+2. feature - The review requests a new feature or improvement
+3. praise - The review is positive feedback, testimonial, or general appreciation
 
-Analyze the review text and rating. Return ONLY one word: BUG, FEATURE, or PRAISE.
+Analyze the review text and rating carefully and classify it into the appropriate category.
 """
 
 
-async def triage_node(state: ReviewState) -> dict:
-    """Classify the current review and prepare for routing.
+class ReviewClassification(BaseModel):
+    """Structured output for review classification."""
+    
+    category: Literal["bug", "feature", "praise"] = Field(
+        description="The classification category: 'bug', 'feature', or 'praise'"
+    )
+    confidence: float = Field(
+        description="Confidence score between 0.0 and 1.0",
+        ge=0.0,
+        le=1.0
+    )
+    reasoning: str = Field(
+        description="Brief explanation of why this category was chosen"
+    )
 
-    TODO: Implement this function.
+
+async def triage_all_node(state: ReviewState) -> dict:
+    """Classify all reviews in parallel before fan-out.
+
+    Classification happens before dispatch so categories are available
+    in global state for proper routing.
 
     Steps:
-    1. Get the current review from state
-    2. Use an LLM to classify it (use gpt-5-mini for cost efficiency)
-    3. Parse the classification
-    4. Return state update with the classification
-
-    The graph's conditional edges will use this classification to route
-    to the appropriate handler (bug_reporter, feature_analyst, or praise_logger).
+    1. Get all reviews from state
+    2. Classify each review in parallel using LLM
+    3. Return categories in global state
 
     Args:
-        state: Current review state
+        state: Current review state with reviews list
 
     Returns:
-        State update with classification result
+        State update with categories dict: {review_id: category}
     """
-    # TODO: Get current review from state
-    current_review = state.get("current_review")
-
-    if not current_review:
+    reviews = state.get("reviews", [])
+    
+    if not reviews:
         return {
-            "messages": [AIMessage(content="No review to classify.")]
+            "categories": {},
+            "messages": [AIMessage(content="No reviews to classify.")]
         }
 
-    # TODO: Create LLM and classify
-    # Hint: Use ChatOpenAI with gpt-5-mini
-    # llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
-
-    # TODO: Call the LLM with the system prompt and review text
-
-    # TODO: Parse the response to get category (bug/feature/praise)
-
-    # TODO: Return state update
-    # Hint: Return the category so conditional edges can route properly
-
-    raise NotImplementedError("Implement this node!")
-
-
-def route_review(state: ReviewState) -> str:
-    """Route to the appropriate handler based on classification.
-
-    TODO: Implement this routing function.
-
-    This function is used by conditional_edges to determine
-    which node to execute next.
-
-    Args:
-        state: Current state with classification
-
-    Returns:
-        Name of the next node: "bug_reporter", "feature_analyst", or "praise_logger"
-    """
-    # TODO: Read the classification from state
-    # TODO: Return the appropriate node name
-
-    raise NotImplementedError("Implement routing logic!")
+    llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+    structured_llm = llm.with_structured_output(ReviewClassification)
+    
+    # Parallel classification of all reviews
+    async def classify(review: dict) -> tuple[int, ReviewClassification]:
+        """Classify a single review."""
+        messages = [
+            SystemMessage(content=TRIAGE_SYSTEM_PROMPT),
+            HumanMessage(content=f"Review text: {review['text']}\nRating: {review['rating']}/5"),
+        ]
+        classification = await structured_llm.ainvoke(messages)
+        return review["id"], classification
+    
+    # Classify all reviews in parallel
+    results = await asyncio.gather(*[classify(r) for r in reviews])
+    
+    # Collect categories and messages
+    categories = {rid: cls.category for rid, cls in results}
+    messages = [
+        AIMessage(
+            content=(
+                f"Classified review #{rid} as: {cls.category.upper()} "
+                f"(confidence: {cls.confidence:.2f}). "
+                f"Reasoning: {cls.reasoning}"
+            )
+        )
+        for rid, cls in results
+    ]
+    
+    return {
+        "categories": categories,
+        "messages": messages,
+    }

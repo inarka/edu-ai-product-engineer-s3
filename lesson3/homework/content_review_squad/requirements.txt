@@ -8,3 +8,6 @@ langsmith>=0.2.0
 
 # Environment variables
 python-dotenv>=1.0.0
+
+# Graph visualization (optional, for PNG export)
+grandalf>=0.6  # Uncomment if you want PNG visualization

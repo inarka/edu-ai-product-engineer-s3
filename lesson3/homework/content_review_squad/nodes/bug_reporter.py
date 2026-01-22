@@ -8,8 +8,10 @@ TODO: Implement this node to:
 """
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage, SystemMessage, HumanMessage
+from langchain_core.messages import AIMessage, SystemMessage, HumanMessage, ToolMessage
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
+from typing import Literal
 
 from ..state import ReviewState
 
@@ -59,38 +61,106 @@ def create_github_issue(title: str, body: str, labels: list[str]) -> dict:
     }
 
 
+class BugReport(BaseModel):
+    summary: str = Field(description="One-line summary")
+    steps_to_reproduce: list[str] = Field(default_factory=list, description="Numbered steps if known")
+    expected_behavior: str = Field(description="What the user expected")
+    actual_behavior: str = Field(description="What actually happened")
+    severity: Literal["critical", "high", "medium", "low"] = Field(description="Severity level")
+
+
 async def bug_reporter_node(state: ReviewState) -> dict:
-    """Process a bug report and create a GitHub issue.
-
-    TODO: Implement this function.
-
-    Steps:
-    1. Get the bug review from state
-    2. Use LLM to generate structured bug report
-    3. (Optional) Use the create_github_issue tool
-    4. Return state update with the result
-
-    Args:
-        state: Current review state
-
-    Returns:
-        State update with bug report result
-    """
-    # TODO: Get current review
+    """Process a bug report review and create a GitHub issue."""
     current_review = state.get("current_review")
-
     if not current_review:
+        return {"messages": [AIMessage(content="No bug review to process.")]}
+
+    review_id = current_review.get("id")
+    review_text = current_review.get("text", "")
+    rating = current_review.get("rating", 0)
+
+    llm = ChatOpenAI(model="gpt-5-mini", temperature=0).bind_tools([create_github_issue])
+
+    messages = [
+        SystemMessage(content=BUG_REPORTER_PROMPT),
+        HumanMessage(
+            content=(
+                "Analyze this bug report and create a GitHub issue.\n"
+                "You MUST call the create_github_issue tool with:\n"
+                "- title: One-line summary (str)\n"
+                "- body: Full bug report in markdown (str)\n"
+                "- labels: Include 'bug' and one of ['severity:critical','severity:high','severity:medium','severity:low'] (list[str])\n"
+                f"Review ID: {review_id}\n"
+                f"Rating: {rating}/5\n"
+                f"Text: {review_text}\n"
+            )
+        ),
+    ]
+
+    ai_response = await llm.ainvoke(messages)
+
+    tool_calls = getattr(ai_response, "tool_calls", None) or []
+    if not tool_calls:
         return {
-            "messages": [AIMessage(content="No bug review to process.")]
+            "bug_results": [{
+                "id": review_id,
+                "category": "bug",
+                "action_taken": "Failed: LLM did not call tool",
+                "details": {"llm_output": ai_response.content},
+            }],
+            "messages": [ai_response],
         }
 
-    # TODO: Create LLM (can use gpt-5-mini for this task)
+    tool_call = tool_calls[0]
+    tool_name = tool_call.get("name", "")
+    if tool_name != "create_github_issue":
+        return {
+            "bug_results": [{
+                "id": review_id,
+                "category": "bug",
+                "action_taken": f"Failed: Unexpected tool call: {tool_name}",
+                "details": {"tool_call": tool_call},
+            }],
+            "messages": [ai_response],
+        }
 
-    # TODO: Generate structured bug report
+    tool_args = tool_call.get("args", {}) or {}
+    title = tool_args.get("title") or f"Bug report from review {review_id}"
+    body = tool_args.get("body") or f"Review: {review_text}"
+    labels = tool_args.get("labels") or ["bug"]
+    if isinstance(labels, str):
+        labels = [labels]
+    issue_result = create_github_issue.invoke({"title": title, "body": body, "labels": labels})
 
-    # TODO: Optionally create GitHub issue
+    tool_message = ToolMessage(
+        content=str(issue_result),
+        tool_call_id=tool_call.get("id", ""),
+    )
 
-    # TODO: Return state update with result
-    # Hint: Add to bug_results list in state
+    # Extract severity from labels
+    labels = tool_args.get("labels", [])
+    severity = _extract_severity_from_labels(labels)
 
-    raise NotImplementedError("Implement this node!")
+    return {
+        "bug_results": [{
+            "id": review_id,
+            "category": "bug",
+            "action_taken": f"Created GitHub issue #{issue_result.get('issue_number')}",
+            "details": {
+                "issue": issue_result,
+                "severity": severity,
+                "labels": labels,
+            },
+        }],
+        "messages": [ai_response, tool_message],
+    }
+
+
+def _extract_severity_from_labels(labels: list[str]) -> str:
+    for label in labels:
+        lb = label.lower().strip()
+        if lb.startswith("severity:"):
+            lvl = lb.split("severity:", 1)[1].strip()
+            if lvl in {"critical","high","medium","low"}:
+                return lvl
+    return "medium"

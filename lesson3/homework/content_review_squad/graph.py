@@ -1,64 +1,92 @@
 """Graph assembly for the Content Review Squad.
 
-TODO: Implement the graph wiring.
+Architecture:
+- triage_all classifies all reviews before fan-out
+- dispatch_reviews creates Send for each review to appropriate handler
+- Each handler (bug_reporter, feature_processor, praise_logger) is a single node
+- feature_processor includes interrupt() for human-in-the-loop approval
+- All handlers fan-in to deferred summary node
 
-Key patterns to implement:
-1. Triage node at entry
-2. Conditional edges based on classification
-3. Fan-in to summary node
-4. Human-in-the-loop for feature approval
+Key insight: Single-node handlers are required because Command(goto=...) inside
+Send branches applies updates to global state, losing isolated current_review.
 """
 
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Send
 
 from .state import ReviewState
 from .nodes import (
-    triage_node,
+    triage_all_node,
     bug_reporter_node,
-    feature_analyst_node,
+    feature_processor_node,
     praise_logger_node,
     summary_node,
 )
-from .nodes.triage import route_review
+
+
+def dispatch_reviews(state: ReviewState):
+    """Dispatch reviews to appropriate handlers based on categories.
+
+    Reads categories from global state (set by triage_all_node) and creates
+    Send for each review to route it to the correct handler.
+
+    Args:
+        state: Current review state with categories and reviews
+
+    Returns:
+        List of Send objects routing each review to appropriate handler
+    """
+    categories = state.get("categories", {})
+    reviews = state.get("reviews", [])
+
+    sends = []
+    for r in reviews:
+        review_id = r.get("id")
+        category = categories.get(review_id, "bug")  # default to bug if not classified
+
+        # Map category to target node
+        node = {
+            "bug": "bug_reporter",
+            "feature": "feature_processor",
+            "praise": "praise_logger",
+        }.get(category, "bug_reporter")
+
+        # Send passes isolated state to the next node
+        sends.append(Send(node, {
+            "current_review": r,
+            "category": category,
+        }))
+
+    return sends
 
 
 def create_content_review_squad(checkpointer=None):
     """Create and compile the Content Review Squad graph.
 
-    TODO: Implement this function.
-
     Architecture:
     ```
                         ┌─────────────────┐
-                        │  Triage Agent   │
+                        │   Triage All    │
+                        │  (classifier)   │
                         └────────┬────────┘
                                  │
                     ┌────────────┼────────────┐
                     ▼            ▼            ▼
              ┌───────────┐ ┌───────────┐ ┌───────────┐
              │    Bug    │ │  Feature  │ │   Praise  │
-             │  Reporter │ │  Analyst  │ │   Logger  │
+             │  Reporter │ │ Processor │ │   Logger  │
              └─────┬─────┘ └─────┬─────┘ └─────┬─────┘
                    │             │             │
-                   │      [HUMAN REVIEW]       │
+                   │      [interrupt()]        │
                    │             │             │
                    └─────────────┼─────────────┘
                                  ▼
                         ┌─────────────────┐
                         │     Summary     │
+                        │    (deferred)   │
                         └─────────────────┘
     ```
-
-    Steps:
-    1. Create StateGraph with ReviewState
-    2. Add all nodes
-    3. Add edges from START to triage
-    4. Add conditional edges from triage to handlers
-    5. Add edges from handlers to summary
-    6. Add edge from summary to END
-    7. Compile with checkpointer
-    8. For human-in-the-loop: use interrupt_before or interrupt_after
 
     Args:
         checkpointer: Optional checkpointer for persistence
@@ -66,49 +94,40 @@ def create_content_review_squad(checkpointer=None):
     Returns:
         Compiled StateGraph
     """
-    # TODO: Initialize graph
     graph = StateGraph(ReviewState)
 
-    # TODO: Add nodes
-    # graph.add_node("triage", triage_node)
-    # graph.add_node("bug_reporter", bug_reporter_node)
-    # ... etc
+    # === NODES ===
+    graph.add_node("triage_all", triage_all_node)
+    graph.add_node("bug_reporter", bug_reporter_node)
+    graph.add_node("feature_processor", feature_processor_node)
+    graph.add_node("praise_logger", praise_logger_node)
 
-    # TODO: Add entry edge
-    # graph.add_edge(START, "triage")
+    # Summary runs once after all branches complete (deferred)
+    graph.add_node("summary", summary_node, defer=True)
 
-    # TODO: Add conditional edges from triage
-    # This is the key routing logic!
-    # graph.add_conditional_edges(
-    #     "triage",
-    #     route_review,  # The routing function
-    #     {
-    #         "bug_reporter": "bug_reporter",
-    #         "feature_analyst": "feature_analyst",
-    #         "praise_logger": "praise_logger",
-    #     }
-    # )
+    # === EDGES ===
+    # START -> triage_all (classifies all reviews)
+    graph.add_edge(START, "triage_all")
 
-    # TODO: Add fan-in edges to summary
-    # graph.add_edge("bug_reporter", "summary")
-    # graph.add_edge("feature_analyst", "summary")
-    # graph.add_edge("praise_logger", "summary")
+    # FAN-OUT: triage_all -> dispatch -> Send to handlers
+    # dispatch_reviews reads categories and creates Send for each review
+    graph.add_conditional_edges(
+        "triage_all",
+        dispatch_reviews,
+        ["bug_reporter", "feature_processor", "praise_logger"]
+    )
 
-    # TODO: Add exit edge
-    # graph.add_edge("summary", END)
+    # FAN-IN: all handlers converge to summary
+    graph.add_edge("bug_reporter", "summary")
+    graph.add_edge("feature_processor", "summary")
+    graph.add_edge("praise_logger", "summary")
 
-    # TODO: Compile with checkpointer
+    # summary -> END
+    graph.add_edge("summary", END)
+
     if checkpointer is None:
         checkpointer = MemorySaver()
 
-    # For human-in-the-loop, use interrupt_before or interrupt_after:
-    # return graph.compile(
-    #     checkpointer=checkpointer,
-    #     interrupt_before=["feature_analyst"],  # Pause before feature analysis
-    # )
-
-    raise NotImplementedError("Implement the graph wiring!")
-
-
-# Convenience instance (students should implement create_content_review_squad first)
-# content_review_squad = create_content_review_squad()
+    return graph.compile(
+        checkpointer=checkpointer,
+    )

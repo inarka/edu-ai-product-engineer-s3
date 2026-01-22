@@ -1,16 +1,21 @@
 """Main runner for the Content Review Squad homework.
 
 Usage:
-    python main.py
-
-With human-in-the-loop demo:
-    python main.py --interactive
+    python main.py                          # Run with sample reviews
+    python main.py --interactive             # Enable human-in-the-loop
+    python main.py --visualize ascii         # Show graph in ASCII format
+    python main.py --visualize mermaid       # Show Mermaid diagram
+    python main.py --visualize png           # Generate PNG (requires grandalf)
+    python main.py --visualize png --save-graph graph.png  # Save PNG to file
 """
 
 import asyncio
 import argparse
 import os
+import uuid
+
 from dotenv import load_dotenv
+from langgraph.types import Command
 
 # Load environment variables
 load_dotenv()
@@ -74,27 +79,128 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
     print("=" * 60)
     print(f"\nProcessing {len(reviews)} reviews...")
 
-    # TODO: Create the graph
-    # graph = create_content_review_squad()
+    graph = create_content_review_squad()
 
-    # TODO: Process reviews
-    # Option 1: Process one at a time
-    # for review in reviews:
-    #     state = {"current_review": review, ...}
-    #     result = await graph.ainvoke(state, config)
-    #
-    # Option 2: Process batch (more complex)
-    # state = {"reviews": reviews, ...}
-    # result = await graph.ainvoke(state, config)
+    # Create thread ID once for both LangGraph checkpointer and LangSmith grouping
+    trace_thread_id = f"hw3-{uuid.uuid4()}"
+    
+    # Config with metadata for LangSmith Threads grouping
+    # configurable.thread_id is for LangGraph checkpointer
+    # metadata.thread_id is for LangSmith Threads grouping
+    config = {
+        "configurable": {
+            "thread_id": trace_thread_id,
+            "max_concurrency": 10,
+        },
+        # LangSmith Threads are grouped by metadata.thread_id
+        "metadata": {"thread_id": trace_thread_id},
+        # Tags for convenient filtering in LangSmith UI
+        "tags": ["content-review-squad", "hitl"],
+    }
 
-    # TODO: Handle human-in-the-loop for feature requests
-    # If using interrupt_before/after, you'll need to:
-    # 1. Check if graph is paused (state.next is not empty)
-    # 2. Show the pending feature spec
-    # 3. Get human approval
-    # 4. Resume with await graph.ainvoke(None, config)
+    # Important: initialize aggregates if using reducers
+    state: ReviewState = {
+        "reviews": reviews,
+        "categories": {},
+        "bug_results": [],
+        "feature_results": [],
+        "praise_results": [],
+        "pending_feature_specs": {},
+        "feature_decisions": {},  # Can be kept even if approval_node writes decisions itself
+    }
 
-    raise NotImplementedError("Implement the review processing!")
+    # Step 1: Initial run until first pause (or completion)
+    result = await graph.ainvoke(state, config=config)
+
+    # Step 2: Human-in-the-loop cycle (process all interrupts simultaneously)
+    # When multiple feature requests are processed in parallel, each calls interrupt()
+    # Need to handle all interrupts simultaneously via interrupt ID
+    while "__interrupt__" in result and result["__interrupt__"]:
+        interrupts = result["__interrupt__"]
+        
+        print(f"\nFound {len(interrupts)} feature request(s) pending approval...")
+        
+        # Collect decisions for all interrupts
+        resume_values = {}
+        
+        for idx, intr in enumerate(interrupts, 1):
+            # Get payload from interrupt
+            # interrupt can be an object with .value or a dict
+            payload = getattr(intr, "value", None) or (intr if isinstance(intr, dict) else {})
+            
+            review_id = payload.get("review_id")
+            feature_name = payload.get("feature_name", "(unknown)")
+            complexity = payload.get("complexity", "(unknown)")
+            priority = payload.get("priority", "(unknown)")
+            markdown = payload.get("markdown", "")
+            
+            print("\n" + "-" * 60)
+            print(f"HUMAN REVIEW #{idx}/{len(interrupts)} (review #{review_id})")
+            print(f"Feature: {feature_name}")
+            print(f"Complexity: {complexity} | Priority: {priority}")
+            print("-" * 60)
+            print(markdown)
+            print("-" * 60)
+            
+            if interactive:
+                ans = input("Approve? (y/n): ").strip().lower()
+                approved = ans in {"y", "yes"}
+                notes = input("Notes (optional): ").strip()
+            else:
+                approved = True
+                notes = "Auto-approved (interactive=False)."
+            
+            # Save decision with interrupt ID as key
+            # interrupt.id is the unique identifier for the interrupt
+            # If id is unavailable, use review_id as fallback
+            interrupt_id = getattr(intr, "id", None) or review_id
+            resume_values[interrupt_id] = {"approved": approved, "notes": notes}
+        
+        # Resume all interrupts at once via Command(resume={interrupt_id: decision})
+        # Format: {interrupt_id: {"approved": bool, "notes": str}}
+        result = await graph.ainvoke(Command(resume=resume_values), config=config)
+
+    # Step 3: Done - result already contains final state
+    return result
+
+
+def visualize_graph(output_format: str = "ascii", output_file: str | None = None):
+    """Visualize the Content Review Squad graph.
+    
+    Args:
+        output_format: Output format - "ascii", "mermaid", or "png"
+        output_file: Optional file path to save output (for PNG or Mermaid)
+    """
+    graph = create_content_review_squad()
+    graph_obj = graph.get_graph()
+    
+    if output_format == "ascii":
+        print("\n" + "=" * 60)
+        print("GRAPH VISUALIZATION (ASCII)")
+        print("=" * 60)
+        print(graph_obj.draw_ascii())
+    elif output_format == "mermaid":
+        mermaid_text = graph_obj.draw_mermaid()
+        if output_file:
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(mermaid_text)
+            print(f"\nMermaid diagram saved to {output_file}")
+        else:
+            print("\n" + "=" * 60)
+            print("GRAPH VISUALIZATION (Mermaid)")
+            print("=" * 60)
+            print(mermaid_text)
+    elif output_format == "png":
+        try:
+            png_data = graph_obj.draw_mermaid_png()
+            output_path = output_file or "content_review_squad_graph.png"
+            with open(output_path, "wb") as f:
+                f.write(png_data)
+            print(f"\nGraph PNG saved to {output_path}")
+        except Exception as e:
+            print(f"\nERROR: Failed to generate PNG: {e}")
+            print("Install dependencies: pip install grandalf")
+            print("Or use ASCII format: python main.py --visualize ascii")
 
 
 def print_results(state: ReviewState):
@@ -103,7 +209,7 @@ def print_results(state: ReviewState):
     print("PROCESSING RESULTS")
     print("=" * 60)
 
-    # TODO: Print results from state
+    # Print results from state
     # - Bug reports created
     # - Feature specs (approved/pending)
     # - Testimonials logged
@@ -120,7 +226,23 @@ def main():
         action="store_true",
         help="Enable human-in-the-loop for feature requests"
     )
+    parser.add_argument(
+        "--visualize",
+        type=str,
+        choices=["ascii", "mermaid", "png"],
+        help="Visualize the graph (ascii, mermaid, or png)"
+    )
+    parser.add_argument(
+        "--save-graph",
+        type=str,
+        help="Save graph visualization to file (for PNG or Mermaid format)"
+    )
     args = parser.parse_args()
+
+    # If visualize flag is set, show graph and exit
+    if args.visualize:
+        visualize_graph(args.visualize, args.save_graph)
+        return
 
     # Check API key
     if not os.getenv("OPENAI_API_KEY"):
@@ -133,7 +255,7 @@ def main():
 
     # LangSmith trace info
     if os.getenv("LANGCHAIN_API_KEY"):
-        print(f"\nView trace: https://smith.langchain.com")
+        print("\nView trace: https://smith.langchain.com")
         print(f"Project: {os.getenv('LANGCHAIN_PROJECT', 'content-review-squad')}")
 
 
