@@ -81,11 +81,21 @@ async def process_reviews(reviews: list[Review], interactive: bool = False) -> R
 
     graph = create_content_review_squad()
 
+    # Create thread ID once for both LangGraph checkpointer and LangSmith grouping
+    trace_thread_id = f"hw3-{uuid.uuid4()}"
+    
+    # Config with metadata for LangSmith Threads grouping
+    # configurable.thread_id is for LangGraph checkpointer
+    # metadata.thread_id is for LangSmith Threads grouping
     config = {
         "configurable": {
-            "thread_id": f"hw3-{uuid.uuid4()}",
+            "thread_id": trace_thread_id,
             "max_concurrency": 10,
-        }
+        },
+        # LangSmith Threads are grouped by metadata.thread_id
+        "metadata": {"thread_id": trace_thread_id},
+        # Tags for convenient filtering in LangSmith UI
+        "tags": ["content-review-squad", "hitl"],
     }
 
     # Important: initialize aggregates if using reducers
