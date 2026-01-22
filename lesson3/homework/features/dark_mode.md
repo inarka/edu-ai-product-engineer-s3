@@ -1,13 +1,13 @@
 # Dark Mode
 
 ## Problem
-Users experience eye strain and discomfort when using the app in low-light environments due to a bright UI.
+Users experience eye strain when using the app in low-light environments due to a bright UI with no dark theme option.
 
 ## Proposed solution
-Add an optional Dark Mode theme that applies a dark color palette across core screens. Include a setting to toggle Light/Dark and optionally follow the device/system theme.
+Add a Dark Mode theme that applies a dark color palette across the app, with a settings toggle (Light/Dark/System default). Ensure key screens, typography, icons, and contrast meet accessibility guidelines.
 
 ## User benefit
-Improves comfort for night use, reduces eye strain, and increases satisfaction and retention for users who prefer darker interfaces.
+More comfortable nighttime use, reduced eye strain, improved accessibility, and higher user satisfaction/retention.
 
 ## Complexity
 - Complexity: medium
@@ -16,11 +16,11 @@ Improves comfort for night use, reduces eye strain, and increases satisfaction a
 - Priority: high
 
 ## Acceptance criteria
-- A Dark Mode theme is available and can be enabled/disabled from Settings.
-- When enabled, core screens (navigation, backgrounds, text, dialogs) use dark colors with readable contrast.
-- Theme choice persists across app restarts.
-- No critical UI elements become unreadable or lose functionality in Dark Mode.
-- (If supported) An option to match system theme correctly switches between light/dark based on OS settings.
+- A user can select Light, Dark, or System default appearance in Settings.
+- When set to Dark, all primary app screens render with dark backgrounds and readable text/icons without visual regressions.
+- When set to System default, the app follows the device OS theme and updates on OS theme change (where supported).
+- Color contrast in Dark Mode meets WCAG AA for text and essential UI elements.
+- User preference persists across app restarts and updates.
 
 ---
 ## Original review

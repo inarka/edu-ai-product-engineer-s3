@@ -1,13 +1,13 @@
 # Notion Integration
 
 ## Problem
-Users who organize work in Notion cannot easily sync or export content/tasks from the app into their existing Notion workflow, creating duplication and friction.
+Users who manage notes, tasks, or knowledge bases in Notion can’t easily sync or export content from the app into their existing Notion workflow, creating manual copy/paste and context switching.
 
 ## Proposed solution
-Build a Notion integration using Notion OAuth to let users connect a Notion workspace, choose a target database/page, and push selected app items (e.g., notes/tasks/records) into Notion with configurable field mapping. Include basic one-way sync (app → Notion) and manual re-sync.
+Build a Notion integration using the Notion API with OAuth connection. Provide options to export or sync key app content to a selected Notion workspace/page/database, including configurable mapping (e.g., title, body, tags, dates) and a one-click “Send to Notion” action.
 
 ## User benefit
-Reduces manual copying, keeps a single source of truth in Notion, and makes the product fit into established personal/team workflows—improving retention for Notion-heavy users.
+Reduces manual work and friction by letting users keep their workflow centralized in Notion, improving adoption for Notion-centric teams and power users.
 
 ## Complexity
 - Complexity: medium
@@ -16,11 +16,11 @@ Reduces manual copying, keeps a single source of truth in Notion, and makes the 
 - Priority: high
 
 ## Acceptance criteria
-- User can connect and disconnect a Notion workspace via OAuth.
-- User can select a target Notion page or database to export/sync into.
-- User can map core app fields to Notion properties (at minimum: title + description/content; optional: status, due date, tags).
-- User can export/sync an item to Notion and receives clear success/error feedback.
-- System handles common API failures gracefully (rate limits, revoked access) and prompts user to reconnect when needed.
+- Users can connect and disconnect a Notion account via OAuth.
+- Users can select a destination Notion page or database.
+- Users can send an item to Notion and see a success/error state.
+- Basic field mapping is supported (at minimum: title + content/body; optional: tags/date).
+- Integration handles common Notion API errors gracefully (permission missing, destination not found, rate limit) and provides actionable messaging.
 
 ---
 ## Original review
