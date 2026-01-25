@@ -1,23 +1,28 @@
 """
-Voice Agent using LiveKit + OpenAI Realtime API
+Voice Agent using LiveKit + OpenAI Realtime API or Gemini Live API
 
 This example demonstrates a voice assistant that:
 1. Uses LiveKit for real-time audio streaming
-2. Uses OpenAI's Realtime API for speech-to-speech
+2. Supports BOTH OpenAI Realtime API and Gemini Live API
 3. Supports tool calling for sales data queries
+
+Switch providers via VOICE_PROVIDER env var: "openai" (default) or "gemini"
 
 Prerequisites:
 - LiveKit Cloud account (or self-hosted server)
-- OpenAI API key with Realtime API access
+- OpenAI API key OR Google API key
 - Run test_setup.py first to verify configuration
 
 Run:
+    # OpenAI (default)
     python voice_agents/livekit_realtime.py
+
+    # Gemini
+    VOICE_PROVIDER=gemini python voice_agents/livekit_realtime.py
 
 Then connect via LiveKit Playground or your own client.
 """
 
-import asyncio
 import os
 import sys
 from pathlib import Path
@@ -29,15 +34,85 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# =============================================================================
+# Provider Selection
+# =============================================================================
+
+VOICE_PROVIDER = os.getenv("VOICE_PROVIDER", "openai").lower()
+
 # LiveKit imports
 try:
     from livekit import rtc
     from livekit.agents import Agent, AgentSession, AutoSubscribe, JobContext, WorkerOptions, cli, function_tool
-    from livekit.plugins import openai, silero
-except ImportError:
-    print("Error: LiveKit packages not installed.")
-    print("Run: pip install livekit livekit-agents livekit-plugins-openai livekit-plugins-silero")
+    from livekit.plugins import silero
+
+    # Import provider-specific plugins
+    if VOICE_PROVIDER == "gemini":
+        from livekit.plugins import google
+        print("Using Gemini Live API")
+    else:
+        from livekit.plugins import openai
+        print("Using OpenAI Realtime API")
+
+except ImportError as e:
+    print(f"Error: LiveKit packages not installed. {e}")
+    print("\nFor OpenAI:")
+    print("  pip install livekit livekit-agents livekit-plugins-openai livekit-plugins-silero")
+    print("\nFor Gemini:")
+    print("  pip install livekit livekit-agents livekit-plugins-google livekit-plugins-silero")
     sys.exit(1)
+
+
+# =============================================================================
+# Provider Configuration
+# =============================================================================
+
+# Voice mapping between providers
+VOICE_MAP = {
+    "openai": {
+        "default": "alloy",
+        "voices": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+    },
+    "gemini": {
+        "default": "Puck",
+        "voices": ["Puck", "Charon", "Kore", "Fenrir", "Aoede"],
+    },
+}
+
+
+def get_realtime_model():
+    """Get the appropriate realtime model based on VOICE_PROVIDER."""
+    voice = os.getenv("VOICE_NAME", VOICE_MAP[VOICE_PROVIDER]["default"])
+
+    if VOICE_PROVIDER == "gemini":
+        return google.realtime.RealtimeModel(
+            voice=voice,
+            temperature=0.8,
+        )
+    else:
+        return openai.realtime.RealtimeModel(
+            voice=voice,
+            temperature=0.8,
+        )
+
+
+def get_stt():
+    """Get the STT model based on provider."""
+    if VOICE_PROVIDER == "gemini":
+        # Gemini Live API handles STT internally
+        return None
+    else:
+        return openai.STT(model="whisper-1")
+
+
+def get_tts():
+    """Get the TTS model based on provider."""
+    if VOICE_PROVIDER == "gemini":
+        # Gemini Live API handles TTS internally
+        return None
+    else:
+        voice = os.getenv("VOICE_NAME", VOICE_MAP["openai"]["default"])
+        return openai.TTS(voice=voice)
 
 
 # =============================================================================
@@ -175,30 +250,37 @@ You: "Here are your recent positive responses. Sarah Chen from TechCorp said she
 </examples>
 """
 
-    # Create the voice agent
-    # Using OpenAI Realtime API for lowest latency
-    agent = Agent(
-        instructions=system_prompt,
-        vad=silero.VAD.load(),  # Voice Activity Detection
-        stt=openai.STT(model="whisper-1"),
-        llm=openai.realtime.RealtimeModel(
-            voice="alloy",
-            temperature=0.8,
-        ),
-        tts=openai.TTS(voice="alloy"),
-        tools=[get_response_rate, get_top_templates, get_positive_responses],
-    )
+    # Create the voice agent with provider-specific config
+    agent_config = {
+        "instructions": system_prompt,
+        "vad": silero.VAD.load(),  # Voice Activity Detection
+        "llm": get_realtime_model(),
+        "tools": [get_response_rate, get_top_templates, get_positive_responses],
+    }
+
+    # Add STT/TTS only for OpenAI (Gemini handles them internally)
+    stt = get_stt()
+    tts = get_tts()
+    if stt:
+        agent_config["stt"] = stt
+    if tts:
+        agent_config["tts"] = tts
+
+    agent = Agent(**agent_config)
 
     # Create and start the agent session
     session = AgentSession()
     await session.start(agent, room=ctx.room)
 
     # Initial greeting
-    await session.say(
-        "Hi! I'm your AutoReach analytics assistant. "
-        "Ask me about response rates, top templates, or interested leads.",
-        allow_interruptions=True
-    )
+    # Note: For Gemini, skip greeting - session.say() requires separate TTS
+    # Gemini handles audio natively, user just starts talking
+    if VOICE_PROVIDER != "gemini":
+        await session.say(
+            "Hi! I'm your AutoReach analytics assistant. "
+            "Ask me about response rates, top templates, or interested leads.",
+            allow_interruptions=True
+        )
 
 
 # =============================================================================
@@ -206,19 +288,27 @@ You: "Here are your recent positive responses. Sarah Chen from TechCorp said she
 # =============================================================================
 
 if __name__ == "__main__":
-    # Verify environment
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Error: OPENAI_API_KEY not set")
-        print("Copy .env.example to .env and add your API key")
-        sys.exit(1)
+    # Verify environment based on provider
+    if VOICE_PROVIDER == "gemini":
+        if not os.getenv("GOOGLE_API_KEY"):
+            print("Error: GOOGLE_API_KEY not set")
+            print("Copy .env.example to .env and add your Google API key")
+            sys.exit(1)
+    else:
+        if not os.getenv("OPENAI_API_KEY"):
+            print("Error: OPENAI_API_KEY not set")
+            print("Copy .env.example to .env and add your API key")
+            sys.exit(1)
 
     if not os.getenv("LIVEKIT_URL"):
         print("Error: LiveKit credentials not set")
         print("Set LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET in .env")
         sys.exit(1)
 
-    print("Starting Voice Agent...")
+    print(f"\nStarting Voice Agent with {VOICE_PROVIDER.upper()}...")
     print(f"LiveKit URL: {os.getenv('LIVEKIT_URL')}")
+    print(f"Voice: {os.getenv('VOICE_NAME', VOICE_MAP[VOICE_PROVIDER]['default'])}")
+    print(f"\nAvailable voices for {VOICE_PROVIDER}: {', '.join(VOICE_MAP[VOICE_PROVIDER]['voices'])}")
     print("\nConnect via LiveKit Playground or your client to start talking.")
     print("Ctrl+C to stop.\n")
 
