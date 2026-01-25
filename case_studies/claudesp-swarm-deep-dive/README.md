@@ -34,6 +34,7 @@ In one 13-minute session, claudesp orchestrated 10 specialized agents to build *
 ## Files
 
 - [SwarmDeepDive.pdf](./20260125_EDU_AIProductEngineer_S2E5_SwarmDeepDive.pdf) - Full presentation slides
+- [claudesp_swarm_log.txt](./claudesp_swarm_log.txt) - Raw execution log showing all agent coordination, tool calls, and message passing
 
 ## Resources
 
